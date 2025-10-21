@@ -1,6 +1,6 @@
-# S3 Migration Tool v2.3.0
+# S3 Migration Tool v2.6.6
 
-A production-ready, high-performance migration tool for S3-compatible storage and Google Drive with PostgreSQL-backed multi-pod architecture.
+A production-ready, high-performance migration tool for S3-compatible storage and Google Drive with PostgreSQL-backed multi-pod architecture and adaptive memory management.
 
 ## ✨ Features
 
@@ -9,11 +9,15 @@ A production-ready, high-performance migration tool for S3-compatible storage an
 - 📦 **S3 to S3 migration** (AWS, MinIO, Wasabi, etc.)
 - 🔄 **Google Drive to S3 migration**
 - 🎯 **High availability** with automatic failover
-- 💪 **Concurrent uploads** (50+ workers)
+- 🧠 **Adaptive memory management** with OOM prevention
+- 💪 **Smart worker tuning** (1-100 workers based on memory)
 - 🔒 **Zero-byte file support**
 - 🏗️ **Folder structure preservation**
-- 📊 **Real-time progress tracking**
-- 🌐 **Web UI** with live updates
+- 📊 **Real-time progress tracking** with timestamps
+- 🌐 **Modern Web UI** with minimalist design
+- 📅 **Advanced filtering** (date range, status)
+- 🔄 **Two-phase migration** (discovery → upload)
+- 🎨 **Clean, professional interface**
 
 ## 🏗️ Architecture
 
@@ -85,6 +89,37 @@ kubectl get pods -n s3-migration
 - [Security Guidelines](SECURITY.md) - Secrets management
 - [API Documentation](#api-endpoints) - REST API reference
 
+## 🧠 Memory Management
+
+### Adaptive Worker Scaling
+- **Memory-aware tuning** - Workers adjust based on available memory
+- **OOM prevention** - Automatic worker reduction when memory is low
+- **Smart scaling** - 1-100 workers based on system resources
+- **Real-time monitoring** - Continuous memory usage tracking
+
+### Performance Optimization
+- **Streaming transfers** - No file buffering to prevent OOM
+- **Connection pooling** - Optimized HTTP client settings
+- **Garbage collection** - Aggressive GC when memory is high
+- **Memory limits** - Kubernetes and Go runtime limits
+
+### Configuration
+```yaml
+# Kubernetes memory limits
+resources:
+  requests:
+    memory: "512Mi"
+  limits:
+    memory: "2Gi"
+
+# Go runtime limits
+env:
+- name: GOMEMLIMIT
+  value: "1800MiB"  # 90% of 2Gi limit
+- name: GOGC
+  value: "50"       # Aggressive garbage collection
+```
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -95,6 +130,8 @@ kubectl get pods -n s3-migration
 | `DB_CONNECTION_STRING` | **Yes** | - | PostgreSQL connection |
 | `PORT` | No | `8000` | API server port |
 | `GIN_MODE` | No | `release` | Gin framework mode |
+| `GOMEMLIMIT` | No | `1800MiB` | Go memory limit |
+| `GOGC` | No | `50` | Garbage collection percentage |
 
 ### Scaling
 
@@ -105,6 +142,29 @@ kubectl scale deployment s3-migration --replicas=5 -n s3-migration
 # Auto-scaling (HPA)
 kubectl autoscale deployment s3-migration --min=3 --max=10 --cpu-percent=70 -n s3-migration
 ```
+
+## 🌐 Web UI Features
+
+### Modern Interface
+- **Minimalist design** - Clean, professional appearance
+- **Real-time updates** - Live progress tracking
+- **Advanced filtering** - Date range and status filters
+- **Task management** - View, monitor, and clean up tasks
+- **Responsive design** - Works on desktop and mobile
+
+### Task Management
+- **Comprehensive timestamps** - Start time, end time, running duration
+- **Progress tracking** - Real-time speed, ETA, and completion percentage
+- **Status indicators** - Running, completed, failed states
+- **Error reporting** - Detailed error messages and hints
+- **Bulk operations** - Clean up failed/completed tasks
+
+### Filtering & Search
+- **Date range filtering** - Filter tasks by start date
+- **Status filtering** - Show only running/completed/failed tasks
+- **Combined filters** - Date + status filtering
+- **Real-time updates** - Instant filter application
+- **Clear filters** - One-click reset
 
 ## 🌐 API Endpoints
 
@@ -167,11 +227,14 @@ See [SECURITY.md](SECURITY.md) for detailed security guidelines.
 
 ## 🏆 Performance
 
-- **50 concurrent workers** for maximum throughput
-- **Streaming uploads** to prevent OOM
+- **Adaptive worker scaling** (1-100 workers based on available memory)
+- **Memory-aware tuning** prevents OOM crashes
+- **Streaming uploads** for large files (no buffering)
 - **0-byte file handling** with proper headers
 - **Bandwidth monitoring** and throttling
 - **Auto-retry** on transient failures
+- **Cross-account S3 streaming** for maximum efficiency
+- **Google Drive optimization** with connection pooling
 
 ## 📊 Monitoring
 
@@ -208,21 +271,51 @@ Fixed in v2.3.0 - 0-byte files handled specially.
 
 ## 📝 Changelog
 
-### v2.3.0 (Latest)
-- ✅ PostgreSQL RDS backend
-- ✅ Multi-pod horizontal scaling
-- ✅ Removed PVC dependencies
-- ✅ 0-byte file fix
-- ✅ State persistence across restarts
+### v2.6.6 (Latest) - Minimalist Design
+- ✅ **Minimalist filter UI** - Clean, professional design
+- ✅ **Advanced task filtering** - Date range and status filters
+- ✅ **Real-time timestamps** - Start time, end time, running duration
+- ✅ **Fixed duplicate refresh** - Single refresh interval (50% performance improvement)
+- ✅ **Memory management** - Adaptive worker scaling prevents OOM
+- ✅ **S3-to-S3 optimization** - Streaming transfers, reduced workers
+- ✅ **Clean work directory** - Removed 15+ temporary files
 
-### v2.2.50
-- ✅ Fixed 0-byte file uploads
-- ✅ Improved error handling
+### v2.6.5 - Consistent Design
+- ✅ **Consistent UI styling** - Filter matches application design
+- ✅ **Professional appearance** - Clean, polished interface
+- ✅ **Maintainable code** - CSS classes instead of inline styles
 
-### v2.2.49
-- ✅ Concurrent folder discovery
-- ✅ Two-phase migration (discovery → upload)
-- ✅ 50 concurrent workers
+### v2.6.4 - Date Filtering
+- ✅ **Date range filtering** - Filter tasks by start date
+- ✅ **Status filtering** - Filter by running/completed/failed
+- ✅ **Combined filters** - Date + status filtering
+- ✅ **Real-time updates** - Instant filter application
+
+### v2.6.3 - Timestamps & Refresh
+- ✅ **Task timestamps** - Start time, end time, running duration
+- ✅ **Reduced refresh frequency** - 15 seconds instead of 5 seconds
+- ✅ **Better UX** - Smoother, less aggressive updates
+
+### v2.6.2 - UI Fixes
+- ✅ **Input box consistency** - All credential fields same size
+- ✅ **Professional styling** - Clean, uniform appearance
+
+### v2.6.1 - Clean Code
+- ✅ **Removed old tuner logic** - Simplified worker management
+- ✅ **Memory-first approach** - Adaptive limits based on available memory
+- ✅ **S3-to-S3 fixes** - Streaming transfers, reduced workers
+
+### v2.6.0 - Adaptive Memory
+- ✅ **Memory-aware worker scaling** - Prevents OOM crashes
+- ✅ **Adaptive tuning** - Workers adjust based on memory usage
+- ✅ **OOM prevention** - Smart memory management
+
+### v2.3.0 - RDS Backend
+- ✅ **PostgreSQL RDS backend** - Shared state across pods
+- ✅ **Multi-pod horizontal scaling** - 3+ replicas
+- ✅ **Removed PVC dependencies** - No more persistent volumes
+- ✅ **0-byte file fix** - Proper handling of empty files
+- ✅ **State persistence** - Survives pod restarts
 
 ## 🤝 Contributing
 
