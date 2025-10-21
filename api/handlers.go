@@ -694,7 +694,28 @@ func runEnhancedMigration(ctx context.Context, taskID string, enhancedMigrator *
 	var err error
 	
 	if enhancedMigrator == nil {
-		err = fmt.Errorf("enhanced migrator not initialized")
+		// Create a new migrator for retry tasks using the original request credentials
+		fmt.Printf("Creating new enhanced migrator for retry task\n")
+		
+		// Check if credentials are available
+		if req.SourceCredentials == nil {
+			err = fmt.Errorf("cannot retry task: source credentials not available (credentials are not persisted for security reasons)")
+			fmt.Printf("ERROR: %v\n", err)
+		} else {
+			enhancedMigrator, err = core.NewEnhancedMigrator(ctx, core.EnhancedMigratorConfig{
+				ConnectionPoolSize: 10,
+				StreamChunkSize:    64 * 1024 * 1024, // 64MB
+				AccessKey:          req.SourceCredentials.AccessKey,
+				SecretKey:          req.SourceCredentials.SecretKey,
+				Region:             destRegion,
+				EndpointURL:        req.SourceCredentials.EndpointURL,
+			})
+			if err != nil {
+				fmt.Printf("Failed to create enhanced migrator: %v\n", err)
+			} else {
+				result, err = enhancedMigrator.Migrate(ctx, input)
+			}
+		}
 	} else {
 		result, err = enhancedMigrator.Migrate(ctx, input)
 	}
@@ -909,78 +930,8 @@ func CancelTask(c *gin.Context) {
 	}
 }
 
-// RetryTask handles POST /api/tasks/:taskID/retry
-// @Summary Retry a failed task
-// @Description Restart a failed migration task with the same parameters
-// @Tags tasks
-// @Accept json
-// @Produce json
-// @Param taskID path string true "Task ID"
-// @Success 200 {object} gin.H
-// @Failure 400 {object} gin.H
-// @Failure 404 {object} gin.H
-// @Router /tasks/{taskID}/retry [post]
-func RetryTask(c *gin.Context) {
-	taskID := c.Param("taskID")
-	
-	taskManager.mu.Lock()
-	task, exists := taskManager.tasks[taskID]
-	taskManager.mu.Unlock()
-	
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
-		return
-	}
-	
-	if task.Status.Status != "failed" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only failed tasks can be retried"})
-		return
-	}
-	
-	// Create a new task with the same parameters but a new ID
-	newTaskID := fmt.Sprintf("%s-retry-%d", taskID[:8], time.Now().Unix())
-	
-	// Restore sensitive data for retry
-	restoredRequest := restoreRequestForRetry(&task.OriginalRequest)
-	
-	// Create new status for the retry task
-	newStatus := &models.MigrationStatus{
-		Status:          "pending",
-		Progress:        0,
-		StartTime:       time.Now(),
-		LastUpdateTime:  time.Now(),
-		DryRun:          restoredRequest.DryRun,
-		DryRunVerified:  []string{},
-		SampleFiles:     []string{},
-	}
-	
-	// Create a new context and cancellation function
-	ctx, cancel := context.WithCancel(context.Background())
-	
-	// Create new task info with the same migrator
-	newTaskInfo := &TaskInfo{
-		ID:               newTaskID,
-		Status:           newStatus,
-		EnhancedMigrator: task.EnhancedMigrator,
-		CancelFn:         cancel,
-		StartTime:        time.Now(),
-		OriginalRequest:  task.OriginalRequest,
-	}
-	
-	// Register the new task in the task manager
-	taskManager.mu.Lock()
-	taskManager.tasks[newTaskID] = newTaskInfo
-	taskManager.mu.Unlock()
-	
-	// Start the migration in a goroutine
-	go runEnhancedMigration(ctx, newTaskID, task.EnhancedMigrator, *restoredRequest)
-	
-	c.JSON(http.StatusOK, gin.H{
-		"task_id": newTaskID,
-		"status": "retry_started",
-		"message": "Task retry initiated successfully",
-	})
-}
+// RetryTask removed - credentials are not persisted for security reasons
+// Users should start a new migration which will automatically skip already copied files
 
 // HealthCheck handles GET /health
 // @Summary Health check

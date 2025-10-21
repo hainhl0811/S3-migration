@@ -44,7 +44,8 @@ func SetupRouter() *gin.Engine {
 		api.GET("/status/:taskID", GetStatus)
 		api.GET("/tasks", ListTasks)
 		api.DELETE("/tasks/:taskID", CancelTask)
-		api.POST("/tasks/:taskID/retry", RetryTask)
+		// Retry removed: credentials not persisted for security
+		// api.POST("/tasks/:taskID/retry", RetryTask)
 
 		// Scheduled migrations
 		api.POST("/schedules", CreateSchedule)

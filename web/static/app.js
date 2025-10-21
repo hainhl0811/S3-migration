@@ -1090,9 +1090,7 @@ function createTaskCard(task) {
                 </div>
             ` : task.status === 'failed' ? `
                 <div class="task-actions">
-                    <button class="btn btn-primary btn-small" onclick="retryTask('${task.task_id}')">
-                        🔄 Retry
-                    </button>
+                    <span class="task-failed-note">⚠️ To resume, start a new migration with the same source/destination. Already copied files will be skipped.</span>
                 </div>
             ` : ''}
         </div>
@@ -1212,29 +1210,8 @@ async function cancelTask(taskId) {
     }
 }
 
-// Retry Task
-async function retryTask(taskId) {
-    if (!confirm('Are you sure you want to retry this task?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/tasks/${taskId}/retry`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            alert('Task retry started successfully');
-            refreshTasks();
-        } else {
-            const error = await response.json();
-            alert(`Failed to retry task: ${error.message || 'Unknown error'}`);
-        }
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
+// Retry removed - credentials not persisted for security
+// Users should start a new migration to resume (already copied files will be skipped)
 
 // Toggle Schedule
 async function toggleSchedule(scheduleId, enable) {
