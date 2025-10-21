@@ -5,9 +5,11 @@ metadata:
   namespace: s3-migration
   labels:
     app: s3-migration
-    version: v2.0.0
+    version: v2.7.0
+  annotations:
+    description: "S3 Migration Tool with Streaming Integrity Verification"
 spec:
-  replicas: 3  # Now we can scale with RDS backend!
+  replicas: 3  # Multi-pod with RDS backend and integrity verification
   selector:
     matchLabels:
       app: s3-migration
@@ -15,11 +17,14 @@ spec:
     metadata:
       labels:
         app: s3-migration
-        version: v2.0.0
+        version: v2.7.0
+      annotations:
+        integrity-verification: "enabled"
+        deployment-date: "2025-10-21"
     spec:
       containers:
       - name: s3-migration
-        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.4.1-single-worker
+        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.7.0-integrity
         imagePullPolicy: Always
         ports:
         - containerPort: 8000

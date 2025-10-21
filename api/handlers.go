@@ -514,6 +514,12 @@ func StartMigration(c *gin.Context) {
 		endpointURL = req.SourceCredentials.EndpointURL
 	}
 	
+	// Get database for integrity manager
+	var integrityManager *state.IntegrityManager
+	if dbManager, ok := taskManager.stateManager.(*state.DBStateManager); ok {
+		integrityManager = state.NewIntegrityManager(dbManager.GetDB())
+	}
+	
 	// Create enhanced migrator with optimal configuration
 	cfg := core.EnhancedMigratorConfig{
 		Region:             region,
@@ -521,11 +527,14 @@ func StartMigration(c *gin.Context) {
 		ConnectionPoolSize: 20, // Increased for better performance
 		EnableStreaming:    false, // Disabled - use multipart copy for large files instead
 		EnablePrefetch:     true,
+		EnableIntegrity:    true,  // ✅ Enable integrity verification
 		StreamChunkSize:    0, // Not used when streaming is disabled
 		CacheTTL:           5 * time.Minute,
 		CacheSize:          1000,
 		AccessKey:          "", // Will be set below if provided
 		SecretKey:          "", // Will be set below if provided
+		TaskID:             taskID,
+		IntegrityManager:   integrityManager,
 	}
 	
 	// Add explicit source credentials if provided
@@ -1626,4 +1635,89 @@ func formatDuration(d time.Duration) string {
 		hours := int(d.Hours()) % 24
 		return fmt.Sprintf("%dd %dh", days, hours)
 	}
+}
+
+// Integrity verification endpoints
+
+// GetIntegritySummary returns integrity summary for a task
+func GetIntegritySummary(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
+		return
+	}
+
+	// Get integrity manager from task manager's state manager
+	dbManager, ok := taskManager.stateManager.(*state.DBStateManager)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "integrity not available"})
+		return
+	}
+
+	integrityManager := state.NewIntegrityManager(dbManager.GetDB())
+	summary, err := integrityManager.GetIntegritySummary(taskID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, summary)
+}
+
+// GetIntegrityReport returns detailed integrity report for a task
+func GetIntegrityReport(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
+		return
+	}
+
+	dbManager, ok := taskManager.stateManager.(*state.DBStateManager)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "integrity not available"})
+		return
+	}
+
+	integrityManager := state.NewIntegrityManager(dbManager.GetDB())
+	report, err := integrityManager.GetIntegrityReport(taskID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, report)
+}
+
+// GetFailedIntegrityObjects returns objects that failed integrity verification
+func GetFailedIntegrityObjects(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
+		return
+	}
+
+	// Get limit from query parameter (default: 100)
+	limit := 100
+	if limitStr := c.Query("limit"); limitStr != "" {
+		fmt.Sscanf(limitStr, "%d", &limit)
+	}
+
+	dbManager, ok := taskManager.stateManager.(*state.DBStateManager)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "integrity not available"})
+		return
+	}
+
+	integrityManager := state.NewIntegrityManager(dbManager.GetDB())
+	failures, err := integrityManager.GetFailedIntegrityObjects(taskID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"task_id":  taskID,
+		"count":    len(failures),
+		"failures": failures,
+	})
 }

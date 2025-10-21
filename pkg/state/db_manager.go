@@ -14,6 +14,11 @@ type DBStateManager struct {
 	db *sql.DB
 }
 
+// GetDB returns the underlying database connection (for integrity manager)
+func (m *DBStateManager) GetDB() *sql.DB {
+	return m.db
+}
+
 // NewDBStateManager creates a new database-backed state manager
 // connectionString examples:
 //   PostgreSQL: "postgres://user:password@host:5432/dbname?sslmode=require"

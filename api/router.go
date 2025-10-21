@@ -47,6 +47,11 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/tasks/cleanup/:status", CleanupTasks) // Delete tasks by status (failed, completed, cancelled)
 		// Retry removed: credentials not persisted for security
 		// api.POST("/tasks/:taskID/retry", RetryTask)
+		
+		// Integrity verification endpoints
+		api.GET("/tasks/:taskId/integrity", GetIntegritySummary)
+		api.GET("/tasks/:taskId/integrity/report", GetIntegrityReport)
+		api.GET("/tasks/:taskId/integrity/failures", GetFailedIntegrityObjects)
 
 		// Scheduled migrations
 		api.POST("/schedules", CreateSchedule)

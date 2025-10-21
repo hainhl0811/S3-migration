@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/signal"
@@ -17,22 +18,25 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
+	"s3migration/pkg/integrity"
 	"s3migration/pkg/pool"
 	"s3migration/pkg/prefetch"
 	"s3migration/pkg/progress"
+	"s3migration/pkg/state"
 	"s3migration/pkg/streaming"
 	"s3migration/pkg/tuning"
 )
 
 // EnhancedMigrator is a high-performance migrator with all optimizations
 type EnhancedMigrator struct {
-	connPool      *pool.ConnectionPool
-	tuner         *tuning.Tuner
-	prefetcher    *prefetch.MetadataCache
-	streamer      *streaming.Streamer
-	progress      *progress.Tracker
-	config        EnhancedMigratorConfig
-	stopRequested atomic.Bool
+	connPool         *pool.ConnectionPool
+	tuner            *tuning.Tuner
+	prefetcher       *prefetch.MetadataCache
+	streamer         *streaming.Streamer
+	progress         *progress.Tracker
+	integrityManager *state.IntegrityManager
+	config           EnhancedMigratorConfig
+	stopRequested    atomic.Bool
 }
 
 // EnhancedMigratorConfig contains configuration for the enhanced migrator
@@ -42,11 +46,14 @@ type EnhancedMigratorConfig struct {
 	ConnectionPoolSize int
 	EnableStreaming    bool
 	EnablePrefetch     bool
+	EnableIntegrity    bool
 	StreamChunkSize    int64
 	CacheTTL           time.Duration
 	CacheSize          int
 	AccessKey          string
 	SecretKey          string
+	TaskID             string
+	IntegrityManager   *state.IntegrityManager
 }
 
 // NewEnhancedMigrator creates a new enhanced migrator with all optimizations
@@ -88,12 +95,13 @@ func NewEnhancedMigrator(ctx context.Context, config EnhancedMigratorConfig) (*E
 	var progressTracker *progress.Tracker
 
 	return &EnhancedMigrator{
-		connPool:   connPool,
-		tuner:      tuner,
-		prefetcher: prefetcher,
-		streamer:   streamer,
-		progress:   progressTracker,
-		config:     config,
+		connPool:         connPool,
+		tuner:            tuner,
+		prefetcher:       prefetcher,
+		streamer:         streamer,
+		progress:         progressTracker,
+		integrityManager: config.IntegrityManager,
+		config:           config,
 	}, nil
 }
 
@@ -675,9 +683,19 @@ func (m *EnhancedMigrator) copyObject(ctx context.Context, client *s3.Client, so
 	return err
 }
 
-// crossAccountCopy performs cross-account copy using GetObject + PutObject
+// crossAccountCopy performs cross-account copy using GetObject + PutObject with streaming integrity verification
 func (m *EnhancedMigrator) crossAccountCopy(ctx context.Context, sourceClient, destClient *s3.Client, sourceBucket, sourceKey, destBucket, destKey string, objectSize int64) error {
 	fmt.Printf("[CROSS-ACCOUNT] Downloading from source: %s/%s (size: %d bytes)\n", sourceBucket, sourceKey, objectSize)
+	
+	// Get source object metadata for ETag
+	sourceHead, err := sourceClient.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(sourceBucket),
+		Key:    aws.String(sourceKey),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get source metadata: %w", err)
+	}
+	sourceETag := aws.ToString(sourceHead.ETag)
 	
 	// Get object from source
 	getResp, err := sourceClient.GetObject(ctx, &s3.GetObjectInput{
@@ -689,30 +707,68 @@ func (m *EnhancedMigrator) crossAccountCopy(ctx context.Context, sourceClient, d
 	}
 	defer getResp.Body.Close()
 	
-	// CRITICAL: Use streaming instead of buffering to prevent OOM
-	// DO NOT use io.ReadAll - stream directly from source to destination
+	// CRITICAL: Use streaming with integrity verification
+	// Calculate hashes as data flows through (no buffering!)
+	var bodyReader io.Reader = getResp.Body
+	var hasher *integrity.StreamingHasher
+	var hashes *integrity.StreamingHashes
+	
+	if m.config.EnableIntegrity && m.integrityManager != nil {
+		fmt.Printf("[INTEGRITY] Enabling streaming integrity verification\n")
+		hasher = integrity.NewStreamingHasher()
+		// TeeReader: data flows to BOTH hasher AND destination
+		bodyReader = io.TeeReader(getResp.Body, hasher)
+	}
+	
 	fmt.Printf("[CROSS-ACCOUNT] Streaming to destination (no buffering): %s/%s\n", destBucket, destKey)
 	
 	// Put object to destination with ONLY required fields
-	// CMC S3 might reject requests with optional metadata/headers
 	putInput := &s3.PutObjectInput{
 		Bucket:        aws.String(destBucket),
 		Key:           aws.String(destKey),
-		Body:          getResp.Body, // Stream directly - no buffering!
-		ContentLength: aws.Int64(objectSize), // Set size since we know it
-		// Do NOT set ContentType - CMC might reject it
-		// Do NOT set ACL - use account default
+		Body:          bodyReader, // Stream with hash calculation!
+		ContentLength: aws.Int64(objectSize),
 	}
-	
-	fmt.Printf("[CROSS-ACCOUNT] PutObject with minimal fields (no ContentType, no ACL, no explicit ContentLength)\n")
 	
 	fmt.Printf("[CROSS-ACCOUNT] PutObject request: Bucket=%s, Key=%s, Size=%d\n", destBucket, destKey, objectSize)
 	
-	_, err = destClient.PutObject(ctx, putInput)
+	putResp, err := destClient.PutObject(ctx, putInput)
 	if err != nil {
 		fmt.Printf("[CROSS-ACCOUNT] ❌ PutObject FAILED: %v\n", err)
-		fmt.Printf("[CROSS-ACCOUNT] Error type: %T\n", err)
 		return fmt.Errorf("failed to put object to destination: %w", err)
+	}
+	
+	destETag := aws.ToString(putResp.ETag)
+	
+	// Verify integrity if enabled
+	if m.config.EnableIntegrity && m.integrityManager != nil && hasher != nil {
+		hashes = hasher.GetHashes()
+		
+		// Detect providers
+		sourceProvider := integrity.DetectProvider(m.config.EndpointURL)
+		destProvider := integrity.DetectProvider(m.config.EndpointURL) // Same for cross-account
+		
+		// Create integrity result
+		result := integrity.CreateIntegrityResult(
+			sourceETag, destETag,
+			hashes,
+			objectSize,
+			sourceProvider, destProvider,
+		)
+		
+		// Store in database
+		err = m.integrityManager.StoreIntegrityResult(
+			m.config.TaskID, sourceKey,
+			result,
+			string(sourceProvider), string(destProvider),
+		)
+		if err != nil {
+			fmt.Printf("[INTEGRITY] ⚠️ Failed to store integrity result: %v\n", err)
+		} else if result.IsValid {
+			fmt.Printf("[INTEGRITY] ✅ Verified: %s (MD5: %s, Size: %d bytes)\n", sourceKey, hashes.MD5, hashes.Size)
+		} else {
+			fmt.Printf("[INTEGRITY] ❌ FAILED: %s - %s\n", sourceKey, result.ErrorMessage)
+		}
 	}
 	
 	fmt.Printf("[CROSS-ACCOUNT] Successfully copied to destination\n")
