@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3-migration
+  namespace: s3-migration
+  labels:
+    app: s3-migration
+    version: v2.0.0
+spec:
+  replicas: 3  # Now we can scale with RDS backend!
+  selector:
+    matchLabels:
+      app: s3-migration
+  template:
+    metadata:
+      labels:
+        app: s3-migration
+        version: v2.0.0
+    spec:
+      containers:
+      - name: s3-migration
+        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.3.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "8000"
+        - name: GIN_MODE
+          value: "release"
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: s3-migration-secrets
+              key: encryption-key
+              optional: true
+        - name: DB_DRIVER
+          value: "postgres"  # or "mysql" for MySQL/MariaDB
+        - name: DB_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: s3-migration-secrets
+              key: db-connection-string
+              optional: false
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: s3-migration-secrets
+              key: google-client-id
+              optional: true
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: s3-migration-secrets
+              key: google-client-secret
+              optional: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3-migration
+  namespace: s3-migration
+  labels:
+    app: s3-migration
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: s3-migration
+

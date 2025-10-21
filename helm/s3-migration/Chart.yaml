@@ -1,0 +1,19 @@
+apiVersion: v2
+name: s3-migration
+description: A high-performance, enterprise-grade S3 migration tool with intelligent auto-tuning
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - s3
+  - migration
+  - backup
+  - sync
+  - storage
+home: https://gitlab.com/hainhl0811/cmc-example-deploy/s3-migration
+sources:
+  - https://gitlab.com/hainhl0811/cmc-example-deploy/s3-migration
+maintainers:
+  - name: S3 Migration Team
+    email: admin@example.com
+

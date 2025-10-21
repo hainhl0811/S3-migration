@@ -1,0 +1,93 @@
+# Example custom values for Helm deployment
+# Copy this file and modify for your environment
+
+# Image configuration
+image:
+  repository: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration
+  tag: "v2.0.0"
+  pullPolicy: Always
+
+# Registry credentials (if using private registry)
+# imagePullSecrets:
+#   - name: gitlab-registry-secret
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: s3-migration.your-domain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: s3-migration-tls
+      hosts:
+        - s3-migration.your-domain.com
+
+# Resource allocation for large migrations
+resources:
+  limits:
+    cpu: 4000m
+    memory: 8Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+# Persistent storage configuration
+persistence:
+  data:
+    enabled: true
+    storageClass: "fast-ssd"  # Use your storage class
+    size: 50Gi
+  logs:
+    enabled: true
+    storageClass: "standard"
+    size: 10Gi
+  state:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 5Gi
+
+# Auto-scaling (optional)
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Encryption key (generate with: openssl rand -base64 32)
+secrets:
+  encryptionKey: ""  # Leave empty to auto-generate
+
+# Node affinity (optional - schedule on specific nodes)
+nodeSelector:
+  workload: "storage-intensive"
+
+# Tolerations (optional - tolerate taints)
+tolerations:
+  - key: "storage-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+# Affinity rules (optional - for high availability)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - s3-migration
+          topologyKey: kubernetes.io/hostname
+

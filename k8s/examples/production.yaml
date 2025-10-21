@@ -1,0 +1,108 @@
+# Production configuration example
+# High availability, monitoring, and security
+
+replicaCount: 2
+
+image:
+  repository: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration
+  tag: "v2.0.0"
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: gitlab-registry-secret
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "7200"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "7200"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: s3-migration.production.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: s3-migration-tls
+      hosts:
+        - s3-migration.production.com
+
+resources:
+  limits:
+    cpu: 8000m
+    memory: 16Gi
+  requests:
+    cpu: 2000m
+    memory: 4Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+persistence:
+  data:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 100Gi
+  logs:
+    enabled: true
+    storageClass: "standard"
+    size: 20Gi
+  state:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 10Gi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - s3-migration
+        topologyKey: kubernetes.io/hostname
+

@@ -1,0 +1,66 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Binaries
+s3migration.exe
+s3migration
+s3migration-linux
+s3migration-mac
+*.exe~
+
+# Build artifacts
+test_build.go
+*.test
+*.out
+
+# Logs
+server_debug.log
+*.log
+logs/
+data/logs/
+
+# Data and state
+data/
+state/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (not needed in image)
+*.md
+!README.md
+
+# Example files
+config.example.yaml
+k8s/examples/
+helm/
+
+# SSL certificates (should be mounted)
+ssl/
+
+# Development files
+web/index_new.html
+web/index_old.html
+
+# Node modules (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (not needed in image)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Kubernetes files (not needed in image)
+k8s/
+helm/
+KUBERNETES.md

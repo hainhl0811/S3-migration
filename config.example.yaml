@@ -1,0 +1,157 @@
+# ============================================
+# S3 Migration Tool - Configuration Examples
+# ============================================
+# Copy this file to config.yaml and fill in your credentials
+# Supports: AWS S3, MinIO, DigitalOcean Spaces, Wasabi, Backblaze B2,
+#           Cloudflare R2, Linode, Scaleway, and any S3-compatible storage
+
+# ============================================
+# EXAMPLE 1: AWS S3
+# ============================================
+aws_example:
+  provider: "aws"
+  access_key_id: "AKIAIOSFODNN7EXAMPLE"
+  secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  region: "us-east-1"
+  # Optional: For AWS GovCloud or custom endpoints
+  # endpoint_url: "https://s3.us-gov-west-1.amazonaws.com"
+
+# ============================================
+# EXAMPLE 2: MinIO (Self-hosted)
+# ============================================
+minio_example:
+  provider: "minio"
+  access_key_id: "minioadmin"
+  secret_access_key: "minioadmin"
+  endpoint_url: "http://localhost:9000"  # Your MinIO server
+  region: "us-east-1"
+  force_path_style: true  # Required for MinIO
+  use_ssl: false  # Set to true if using HTTPS
+
+# ============================================
+# EXAMPLE 3: DigitalOcean Spaces
+# ============================================
+digitalocean_example:
+  provider: "digitalocean"
+  access_key_id: "YOUR_DO_SPACES_KEY"
+  secret_access_key: "YOUR_DO_SPACES_SECRET"
+  region: "nyc3"  # Options: nyc3, sfo3, ams3, sgp1, fra1
+  # endpoint_url is auto-generated: https://nyc3.digitaloceanspaces.com
+
+# ============================================
+# EXAMPLE 4: Wasabi Hot Cloud Storage
+# ============================================
+wasabi_example:
+  provider: "wasabi"
+  access_key_id: "YOUR_WASABI_ACCESS_KEY"
+  secret_access_key: "YOUR_WASABI_SECRET_KEY"
+  region: "us-east-1"  # Options: us-east-1, us-east-2, us-west-1, eu-central-1, etc.
+  # endpoint_url is auto-generated: https://s3.us-east-1.wasabisys.com
+
+# ============================================
+# EXAMPLE 5: Backblaze B2
+# ============================================
+backblaze_example:
+  provider: "backblaze"
+  access_key_id: "YOUR_B2_KEY_ID"
+  secret_access_key: "YOUR_B2_APPLICATION_KEY"
+  region: "us-west-004"  # Check your B2 bucket region
+  # endpoint_url is auto-generated: https://s3.us-west-004.backblazeb2.com
+
+# ============================================
+# EXAMPLE 6: Cloudflare R2
+# ============================================
+cloudflare_example:
+  provider: "cloudflare"
+  access_key_id: "YOUR_R2_ACCESS_KEY_ID"
+  secret_access_key: "YOUR_R2_SECRET_ACCESS_KEY"
+  endpoint_url: "https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com"
+  region: "auto"
+
+# ============================================
+# EXAMPLE 7: Linode Object Storage
+# ============================================
+linode_example:
+  provider: "linode"
+  access_key_id: "YOUR_LINODE_ACCESS_KEY"
+  secret_access_key: "YOUR_LINODE_SECRET_KEY"
+  region: "us-east-1"  # Options: us-east-1, eu-central-1, ap-south-1
+  # endpoint_url is auto-generated: https://us-east-1.linodeobjects.com
+
+# ============================================
+# EXAMPLE 8: Scaleway Object Storage
+# ============================================
+scaleway_example:
+  provider: "scaleway"
+  access_key_id: "YOUR_SCALEWAY_ACCESS_KEY"
+  secret_access_key: "YOUR_SCALEWAY_SECRET_KEY"
+  region: "nl-ams"  # Options: fr-par, nl-ams, pl-waw
+  # endpoint_url is auto-generated: https://s3.nl-ams.scw.cloud
+
+# ============================================
+# EXAMPLE 9: Custom S3-Compatible Service
+# ============================================
+custom_example:
+  provider: "custom"
+  access_key_id: "YOUR_ACCESS_KEY"
+  secret_access_key: "YOUR_SECRET_KEY"
+  endpoint_url: "https://s3.your-custom-provider.com"
+  region: "us-east-1"
+  force_path_style: true  # Usually required for custom providers
+  use_ssl: true
+
+# ============================================
+# Migration Configuration
+# ============================================
+
+# Source Configuration (use credentials from one of the examples above)
+source:
+  provider: "aws"  # or minio, digitalocean, wasabi, etc.
+  access_key_id: "YOUR_SOURCE_ACCESS_KEY"
+  secret_access_key: "YOUR_SOURCE_SECRET_KEY"
+  region: "us-east-1"
+  bucket: "source-bucket-name"
+  prefix: "data/"  # Optional: only migrate specific prefix
+  # endpoint_url: ""  # Optional: for non-AWS providers
+
+# Destination Configuration
+destination:
+  provider: "aws"  # Can be different from source!
+  access_key_id: "YOUR_DEST_ACCESS_KEY"
+  secret_access_key: "YOUR_DEST_SECRET_KEY"
+  region: "us-west-2"
+  bucket: "destination-bucket-name"
+  prefix: "backup/"  # Optional: add prefix to destination
+  # endpoint_url: ""  # Optional: for non-AWS providers
+
+# Migration Settings
+settings:
+  dry_run: false  # Set to true to simulate without copying
+  timeout: 3600  # Timeout in seconds for each transfer (1 hour)
+  
+  # Performance Settings
+  performance:
+    connection_pool_size: 20  # Number of concurrent connections
+    enable_streaming: true  # Use streaming for large files
+    enable_prefetch: true  # Prefetch metadata for better performance
+    stream_chunk_size: 16777216  # 16MB chunk size for streaming
+    
+    # Auto-tuning will adjust these based on workload
+    min_workers: 5
+    max_workers: 50
+
+# ============================================
+# Environment Variables (Alternative)
+# ============================================
+# You can also set credentials via environment variables:
+#
+# AWS/Source:
+#   AWS_ACCESS_KEY_ID or S3_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY or S3_SECRET_ACCESS_KEY
+#   AWS_REGION or S3_REGION
+#   S3_ENDPOINT_URL
+#
+# Provider-specific:
+#   S3_PROVIDER=aws|minio|digitalocean|wasabi|backblaze|cloudflare|linode|scaleway|custom
+#   S3_FORCE_PATH_STYLE=true|false
+#   S3_USE_SSL=true|false

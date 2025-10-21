@@ -1,0 +1,57 @@
+{{- if and .Values.persistence.data.enabled (not .Values.persistence.data.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "s3-migration.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "s3-migration.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.data.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size }}
+  {{- if .Values.persistence.data.storageClass }}
+  storageClassName: {{ .Values.persistence.data.storageClass }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.persistence.logs.enabled (not .Values.persistence.logs.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "s3-migration.fullname" . }}-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "s3-migration.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.logs.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.logs.size }}
+  {{- if .Values.persistence.logs.storageClass }}
+  storageClassName: {{ .Values.persistence.logs.storageClass }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.persistence.state.enabled (not .Values.persistence.state.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "s3-migration.fullname" . }}-state
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "s3-migration.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.state.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.state.size }}
+  {{- if .Values.persistence.state.storageClass }}
+  storageClassName: {{ .Values.persistence.state.storageClass }}
+  {{- end }}
+{{- end }}
+

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: s3-migration-config
+  namespace: s3-migration
+  labels:
+    app: s3-migration
+data:
+  # Application configuration
+  PORT: "8000"
+  GIN_MODE: "release"
+  
+  # Tuning parameters (optional)
+  MAX_WORKERS: "100"
+  BUFFER_SIZE: "5242880"  # 5MB
+  CHUNK_SIZE: "10485760"  # 10MB
+  
+  # Logging
+  LOG_LEVEL: "info"
+  
+  # Health check configuration
+  HEALTH_CHECK_INTERVAL: "30s"
+

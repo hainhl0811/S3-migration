@@ -1,0 +1,59 @@
+# Development configuration example
+# Minimal resources, no HA, easier debugging
+
+replicaCount: 1
+
+image:
+  repository: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration
+  tag: "latest"
+  pullPolicy: Always
+
+env:
+  GIN_MODE: "debug"
+
+service:
+  type: NodePort
+  port: 80
+
+ingress:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+
+persistence:
+  data:
+    enabled: true
+    storageClass: ""
+    size: 5Gi
+  logs:
+    enabled: true
+    storageClass: ""
+    size: 2Gi
+  state:
+    enabled: true
+    storageClass: ""
+    size: 1Gi
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+

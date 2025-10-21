@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 Migration Tool</title>
+    <link rel="stylesheet" href="/static/style.css?v=13">
+    <style>
+        /* Discovery status indicator */
+        .discovery-status {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            animation: pulse 2s infinite;
+        }
+        
+        .discovery-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+        
+        .discovery-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e0e0e0;
+            border-top: 2px solid #2196f3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .discovery-text {
+            font-weight: 500;
+            color: #1976d2;
+            font-size: 14px;
+        }
+        
+        .discovery-note {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+            margin-left: 26px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>S3 Migration Tool</h1>
+            <button id="darkModeToggle" class="theme-toggle" onclick="toggleDarkMode()">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" onclick="showTab('migrate')">Migration</button>
+            <button class="tab" onclick="showTab('tasks')">Tasks</button>
+            <button class="tab" onclick="showTab('schedules')">Schedules</button>
+        </nav>
+
+        <!-- Migration Tab -->
+        <div id="migrate-tab" class="tab-content active">
+            <div class="card">
+                <h2>New Migration</h2>
+                <form id="migrationForm">
+                    <!-- Source Configuration -->
+                    <div class="form-section">
+                        <h3>Source</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Provider</label>
+                                <select id="sourceProvider" onchange="updateSourceProvider()">
+                                    <option value="aws">AWS S3</option>
+                                    <option value="cmc">CMC Telecom S3</option>
+                                    <option value="minio">MinIO</option>
+                                    <option value="wasabi">Wasabi</option>
+                                    <option value="backblaze">Backblaze B2</option>
+                                    <option value="googledrive">Google Drive</option>
+                                    <option value="custom">Custom S3-Compatible</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="sourceRegionGroup">
+                                <label>Region</label>
+                                <select id="sourceRegionSelect" style="display:none">
+                                    <option value="us-east-1">US East (N. Virginia)</option>
+                                    <option value="us-west-1">US West (N. California)</option>
+                                    <option value="us-west-2">US West (Oregon)</option>
+                                    <option value="eu-west-1">EU (Ireland)</option>
+                                    <option value="eu-central-1">EU (Frankfurt)</option>
+                                    <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                                    <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                                </select>
+                                <input type="text" id="sourceRegion" placeholder="Leave empty for S3-compatible" style="display:none">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label id="sourceBucketLabel">Bucket (leave empty to migrate ALL buckets)</label>
+                                <input type="text" id="sourceBucket" placeholder="Leave empty for all buckets, or specify: my-bucket">
+                            </div>
+                            <div class="form-group">
+                                <label id="sourcePrefixLabel">Prefix (filter within bucket)</label>
+                                <input type="text" id="sourcePrefix" placeholder="folder/ or empty for entire bucket">
+                            </div>
+                        </div>
+                        <!-- S3 Credentials -->
+                        <div class="form-row" id="sourceS3Credentials">
+                    <div class="form-group">
+                        <label>Access Key</label>
+                        <input type="text" id="sourceAccessKey" name="sourceAccessKey" placeholder="Required" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Secret Key</label>
+                        <input type="password" id="sourceSecretKey" name="sourceSecretKey" placeholder="Required" required>
+                    </div>
+                        </div>
+                        <div class="form-row" id="sourceEndpointRow">
+                            <div class="form-group">
+                                <label>Endpoint URL</label>
+                                <input type="text" id="sourceEndpoint" placeholder="https://s3.your-provider.com">
+                            </div>
+                        </div>
+
+                        <!-- Google Drive Credentials -->
+                        <div id="sourceGoogleDriveCredentials" style="display:none;">
+            <div style="background: #e8f5e8; border: 1px solid #4caf50; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; color: #2e7d32; font-size: 14px;">🚀 One-Click Login (Recommended for < 100 users):</h4>
+                <p style="margin: 0 0 12px 0; font-size: 13px; color: #424242;">No setup required! Uses a public OAuth app created specifically for this tool.</p>
+                <button type="button" class="btn btn-primary" onclick="quickGoogleLogin()" style="margin-bottom: 12px;">
+                    🔐 Login with Google Drive
+                </button>
+                <div style="background: #fff3cd; border-left: 3px solid #ffc107; padding: 8px 12px; margin-top: 12px; border-radius: 4px;">
+                    <div style="font-size: 12px; color: #856404; line-height: 1.5;">
+                        <strong>⚠️ What to expect:</strong><br>
+                        1. Google will show <strong>"This app isn't verified"</strong> warning<br>
+                        2. Click <strong>"Advanced"</strong> → <strong>"Go to S3 Migration Tool (unsafe)"</strong><br>
+                        3. This is normal for unverified apps - your data is safe!<br>
+                        <em style="color: #6c757d; font-size: 11px;">Works with personal Google accounts. Limited to 100 users until verified.</em>
+                    </div>
+                </div>
+            </div>
+                            
+                            <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+                                <h4 style="margin: 0 0 8px 0; color: #1565c0; font-size: 14px;">🔧 Custom OAuth (No User Limits, No Warnings):</h4>
+                                <p style="margin: 0 0 8px 0; font-size: 13px; color: #424242; font-weight: 500;">Use your own Google Cloud Console credentials - no restrictions!</p>
+                                <div style="background: #c8e6c9; padding: 6px 10px; margin-bottom: 8px; border-radius: 4px; font-size: 12px; color: #2e7d32;">
+                                    ✅ No "unverified app" warning | ✅ Unlimited users | ✅ Full control
+                                </div>
+                                <ol style="margin: 0; padding-left: 16px; font-size: 13px; color: #6c757d; line-height: 1.4;">
+                                    <li>Go to <a href="https://console.cloud.google.com" target="_blank" style="color: #007bff;">Google Cloud Console</a></li>
+                                    <li>Create a project and enable Google Drive API</li>
+                                    <li>Create OAuth 2.0 credentials (Web application)</li>
+                                    <li>Add your domain's <code>/auth/callback</code> URL to authorized redirect URIs</li>
+                                    <li>Copy Client ID and Client Secret below</li>
+                                </ol>
+                            </div>
+                            <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Client ID</label>
+                                        <input type="text" id="sourceClientID" placeholder="Enter your real Client ID from Google Cloud Console">
+                                        <small style="color: #6c757d; font-size: 12px;">From Google Cloud Console → Credentials</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Client Secret</label>
+                                        <input type="password" id="sourceClientSecret" placeholder="Enter your real Client Secret from Google Cloud Console">
+                                        <small style="color: #6c757d; font-size: 12px;">From Google Cloud Console → Credentials</small>
+                                    </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Redirect URL</label>
+                                    <input type="text" id="sourceRedirectURL" placeholder="https://your-domain.com/auth/callback" value="">
+                                </div>
+                                <div class="form-group">
+                                    <label>Access Token</label>
+                                    <input type="password" id="sourceAccessToken" placeholder="OAuth Access Token (auto-generated)">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Refresh Token</label>
+                                    <input type="password" id="sourceRefreshToken" placeholder="OAuth Refresh Token (auto-generated)">
+                                </div>
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="button" id="sourceAuthButton" class="btn btn-secondary" onclick="authenticateGoogleDrive('source')">
+                                        🔐 Authenticate with Google Drive
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-row" id="sourceFolderPicker" style="display:none;">
+                                <div class="form-group">
+                                    <label>Select Folder</label>
+                                    <select id="sourceFolderID" onchange="updateFolderPath()">
+                                        <option value="">Root Folder (All Files)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Selected Path</label>
+                                    <input type="text" id="sourceFolderPath" readonly placeholder="Root folder">
+                                </div>
+                            </div>
+                            
+                            <div style="background: #f0f7ff; border: 1px solid #90caf9; border-radius: 6px; padding: 14px; margin-top: 12px;">
+                                <label style="display: flex; align-items: center; cursor: pointer; user-select: none; margin: 0;">
+                                    <input type="checkbox" id="includeSharedFiles" style="margin-right: 10px; cursor: pointer; width: 18px; height: 18px;">
+                                    <div>
+                                        <strong style="color: #1976d2; font-size: 14px;">📤 Include Files Shared With Me</strong>
+                                        <div style="font-size: 12px; color: #5c6bc0; margin-top: 4px; line-height: 1.4;">
+                                            By default, only files YOU OWN are migrated. Check this to also include files shared with you by others.
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Destination Configuration -->
+                    <div class="form-section">
+                        <h3>Destination</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Provider</label>
+                                <select id="destProvider" onchange="updateDestProvider()">
+                                    <option value="same">Same as Source</option>
+                                    <option value="aws">AWS S3</option>
+                                    <option value="cmc">CMC Telecom S3</option>
+                                    <option value="minio">MinIO</option>
+                                    <option value="wasabi">Wasabi</option>
+                                    <option value="backblaze">Backblaze B2</option>
+                                    <option value="custom">Custom S3-Compatible</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="destRegionGroup">
+                                <label>Region</label>
+                                <select id="destRegionSelect" style="display:none">
+                                    <option value="us-east-1">US East (N. Virginia)</option>
+                                    <option value="us-west-1">US West (N. California)</option>
+                                    <option value="us-west-2">US West (Oregon)</option>
+                                    <option value="eu-west-1">EU (Ireland)</option>
+                                    <option value="eu-central-1">EU (Frankfurt)</option>
+                                    <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                                    <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                                </select>
+                                <input type="text" id="destRegion" placeholder="Leave empty for S3-compatible" style="display:none">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bucket (leave empty to use source bucket names)</label>
+                                <input type="text" id="destBucket" placeholder="Leave empty for same names, or specify: dest-bucket">
+                            </div>
+                            <div class="form-group">
+                                <label>Prefix (add prefix to destination paths)</label>
+                                <input type="text" id="destPrefix" placeholder="backup/ or empty for no prefix">
+                            </div>
+                        </div>
+                        <div class="form-row" id="destCredentialsRow">
+                            <div class="form-group">
+                                <label>Access Key</label>
+                                <input type="text" id="destAccessKey" placeholder="Leave empty to use source">
+                            </div>
+                            <div class="form-group">
+                                <label>Secret Key</label>
+                                <input type="password" id="destSecretKey" placeholder="Leave empty to use source">
+                            </div>
+                        </div>
+                        <div class="form-row" id="destEndpointRow" style="display:none">
+                            <div class="form-group">
+                                <label>Endpoint URL</label>
+                                <input type="text" id="destEndpoint" placeholder="https://s3.your-provider.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Migration Mode -->
+                    <div class="form-section">
+                        <h3>Mode</h3>
+                        <div class="options-grid">
+                            <div class="option-card warning-option">
+                                <label class="option-label">
+                                    <input type="radio" name="migrationMode" value="full_rewrite" checked onchange="updateScheduleVisibility()">
+                                    <div class="option-content">
+                                        <strong>⚠️ Full Rewrite</strong>
+                                        <span>⚠️ OVERWRITES ALL FILES in destination - use with caution!</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="option-card safe-option">
+                                <label class="option-label">
+                                    <input type="radio" name="migrationMode" value="incremental" onchange="updateScheduleVisibility()">
+                                    <div class="option-content">
+                                        <strong>✓ Incremental (Recommended)</strong>
+                                        <span>Only copy new/changed files - safe for ongoing syncs</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="option-card">
+                                <label class="option-label">
+                                    <input type="checkbox" id="dryRun">
+                                    <div class="option-content">
+                                        <strong>Dry Run</strong>
+                                        <span>Simulate only</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Options (for Incremental mode) -->
+                        <div id="scheduleOptions" style="display: none; margin-top: 16px;">
+                            <h4 style="margin-bottom: 12px; font-size: 14px; color: var(--text-secondary);">When to Run</h4>
+                            <div class="schedule-type-selector">
+                                <div class="option-card">
+                                    <label class="option-label">
+                                        <input type="radio" name="scheduleType" value="now" checked onchange="updateScheduleFields()">
+                                        <div class="option-content">
+                                            <strong>▶️ Run Now</strong>
+                                            <span>Execute immediately (one-time)</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="option-card">
+                                    <label class="option-label">
+                                        <input type="radio" name="scheduleType" value="once" onchange="updateScheduleFields()">
+                                        <div class="option-content">
+                                            <strong>⏰ Schedule Once</strong>
+                                            <span>Run at specific date/time (one-time)</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="option-card">
+                                    <label class="option-label">
+                                        <input type="radio" name="scheduleType" value="recurring" onchange="updateScheduleFields()">
+                                        <div class="option-content">
+                                            <strong>🔄 Recurring Schedule</strong>
+                                            <span>Run automatically on schedule (repeating)</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- One-time schedule fields -->
+                            <div id="onceScheduleFields" style="display: none; margin-top: 12px;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Schedule Name</label>
+                                        <input type="text" id="onceScheduleName" placeholder="Migration on Oct 15">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Date</label>
+                                        <input type="date" id="onceScheduleDate">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Time</label>
+                                        <input type="time" id="onceScheduleTime" value="02:00">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Recurring schedule fields -->
+                            <div id="recurringScheduleFields" style="display: none; margin-top: 12px;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Schedule Name</label>
+                                        <input type="text" id="recurringScheduleName" placeholder="Daily backup">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Frequency</label>
+                                        <select id="scheduleFrequency" onchange="updateCronFields()">
+                                            <option value="hourly">Every Hour</option>
+                                            <option value="daily" selected>Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="custom">Custom (Cron)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div id="cronFields" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Cron Expression</label>
+                                        <input type="text" id="cronExpression" placeholder="0 2 * * *">
+                                        <small style="color: var(--text-muted);">Format: minute hour day month weekday</small>
+                                    </div>
+                                </div>
+                                <div id="timeFields" style="display: block;">
+                                    <div class="form-group">
+                                        <label>Time</label>
+                                        <input type="time" id="scheduleTime" value="02:00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn">Start Migration</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('migrationForm').reset()">Reset</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tasks Tab -->
+        <div id="tasks-tab" class="tab-content">
+            <div class="tasks-header">
+                <h2>Active Tasks</h2>
+                <button class="btn btn-small" onclick="refreshTasks()">Refresh</button>
+            </div>
+            <div id="tasksList" class="tasks-container">
+                <p class="loading">Loading tasks...</p>
+            </div>
+        </div>
+
+        <!-- Schedules Tab -->
+        <div id="schedules-tab" class="tab-content">
+            <div class="tasks-header">
+                <h2>Scheduled Migrations</h2>
+                <button class="btn btn-small" onclick="showCreateSchedule()">New Schedule</button>
+            </div>
+            <div id="schedulesList" class="tasks-container">
+                <p class="loading">Loading schedules...</p>
+            </div>
+        </div>
+    </div>
+
+        <script src="/static/app.js?v=46"></script>
+    <script>
+        // Initialize provider selectors on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateSourceProvider();
+            updateDestProvider();
+            
+            // Set default date for one-time schedule (tomorrow)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateInput = document.getElementById('onceScheduleDate');
+            if (dateInput) {
+                dateInput.value = tomorrow.toISOString().split('T')[0];
+                dateInput.min = new Date().toISOString().split('T')[0]; // Prevent past dates
+            }
+        });
+    </script>
+</body>
+</html>
+
+

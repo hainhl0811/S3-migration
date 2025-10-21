@@ -1,0 +1,130 @@
+# ============================================
+# S3 Migration Tool - PRODUCTION Docker Compose
+# ============================================
+version: '3.8'
+
+services:
+  # ============================================
+  # Main S3 Migration Service (Production)
+  # ============================================
+  s3migration:
+    image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.0.8
+    container_name: s3migration-prod
+    ports:
+      - "8000:8000"
+    environment:
+      # Server configuration
+      - PORT=8000
+      - GIN_MODE=release
+      
+      # Security: REQUIRED - Set strong encryption key
+      # ENCRYPTION_KEY is now auto-generated if not provided
+      # - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      
+      # AWS credentials (if using AWS)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      
+      # Security: Disable debug mode in production
+      - GIN_MODE=release
+      
+    volumes:
+      # Mount state directory for persistence
+      - s3migration-state:/app/data/state
+      # Mount config directory (read-only)
+      - ./config:/app/config:ro
+      # Mount logs directory
+      - s3migration-logs:/app/logs
+    restart: unless-stopped
+    
+    # Security: Run as non-root user (defined in Dockerfile)
+    user: "1000:1000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Security: No privileged mode
+    privileged: false
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    
+    networks:
+      - s3migration-network
+
+  # ============================================
+  # Nginx Reverse Proxy (Optional)
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: s3migration-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - s3migration
+    restart: unless-stopped
+    networks:
+      - s3migration-network
+
+networks:
+  s3migration-network:
+    driver: bridge
+    # Security: Enable network encryption
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+
+volumes:
+  s3migration-state:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/state
+  s3migration-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs
+
+# ============================================
+# Production Usage
+# ============================================
+#
+# 1. Set environment variables:
+#    export ENCRYPTION_KEY="your-32-byte-encryption-key-here"
+#    export AWS_ACCESS_KEY_ID="your-access-key"
+#    export AWS_SECRET_ACCESS_KEY="your-secret-key"
+#
+# 2. Start production stack:
+#    docker-compose -f docker-compose.prod.yml up -d
+#
+# 3. View logs:
+#    docker-compose -f docker-compose.prod.yml logs -f
+#
+# 4. Scale if needed:
+#    docker-compose -f docker-compose.prod.yml up -d --scale s3migration=3
+#
+# ============================================

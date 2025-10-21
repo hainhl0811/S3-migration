@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Drive Authentication</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4285f4;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            color: #34a853;
+            font-size: 24px;
+            margin-bottom: 1rem;
+        }
+        .error {
+            color: #ea4335;
+            font-size: 24px;
+            margin-bottom: 1rem;
+        }
+        .message {
+            color: #5f6368;
+            margin-bottom: 1rem;
+        }
+        .close-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .close-btn:hover {
+            background: #3367d6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <div class="message">Completing Google Drive authentication...</div>
+        </div>
+        
+        <div id="success" style="display: none;">
+            <div class="success">✅</div>
+            <div class="message">Authentication successful!</div>
+            <button class="close-btn" onclick="window.close()">Close Window</button>
+        </div>
+        
+        <div id="error" style="display: none;">
+            <div class="error">❌</div>
+            <div class="message" id="errorMessage">Authentication failed</div>
+            <button class="close-btn" onclick="window.close()">Close Window</button>
+        </div>
+    </div>
+
+    <script>
+        // Handle OAuth callback
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                // Always handle the callback ourselves in the popup
+                handleGoogleDriveCallback();
+            } catch (error) {
+                console.error('Callback handling error:', error);
+                showError('Authentication callback failed: ' + error.message);
+            }
+        });
+
+        function handleGoogleDriveCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+            
+            if (error) {
+                showError('Google Drive authentication failed: ' + error);
+                return;
+            }
+            
+            if (!code || !state) {
+                showError('Invalid OAuth response - missing parameters');
+                return;
+            }
+            
+            // Verify state
+            const storedState = sessionStorage.getItem('googleDriveState');
+            if (state !== storedState) {
+                showError('Security error: Invalid state parameter');
+                return;
+            }
+            
+            // Exchange code for tokens
+            exchangeCodeForTokens(code);
+        }
+
+        async function exchangeCodeForTokens(code) {
+            try {
+                const isPublicApp = sessionStorage.getItem('googleDrivePublicApp') === 'true';
+                
+                let response;
+                if (isPublicApp) {
+                    // Quick login - use public OAuth app
+                    response = await fetch('/api/googledrive/quick-auth-url', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            code: code
+                        })
+                    });
+                } else {
+                    // Custom OAuth - use user credentials
+                    const clientID = sessionStorage.getItem('googleDriveClientID');
+                    const clientSecret = sessionStorage.getItem('googleDriveClientSecret');
+                    const redirectURL = sessionStorage.getItem('googleDriveRedirectURL');
+                    
+                    if (!clientID || !clientSecret || !redirectURL) {
+                        showError('Missing authentication parameters');
+                        return;
+                    }
+                    
+                    response = await fetch('/api/googledrive/exchange-token', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            client_id: clientID,
+                            client_secret: clientSecret,
+                            redirect_url: redirectURL,
+                            code: code
+                        })
+                    });
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const tokenData = await response.json();
+                
+                // Send tokens back to parent window
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'googleDriveTokens',
+                        tokens: tokenData
+                    }, '*');
+                }
+                
+                showSuccess();
+                
+            } catch (error) {
+                console.error('Token exchange error:', error);
+                showError('Failed to exchange code for tokens: ' + error.message);
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success').style.display = 'block';
+            
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                window.close();
+            }, 2000);
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        // Listen for messages from parent window
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'googleDriveAuthParams') {
+                if (event.data.isPublicApp) {
+                    sessionStorage.setItem('googleDrivePublicApp', 'true');
+                } else {
+                    sessionStorage.setItem('googleDriveClientID', event.data.clientID);
+                    sessionStorage.setItem('googleDriveClientSecret', event.data.clientSecret);
+                    sessionStorage.setItem('googleDriveRedirectURL', event.data.redirectURL);
+                }
+                sessionStorage.setItem('googleDriveState', event.data.state);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+# Binaries
+s3migration
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Build artifacts
+dist/
+build/
+bin/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets and sensitive files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+.env
+.env.local
+.env.*.local
+credentials.json
+*-credentials.json
+
+# Kubernetes secrets (DO NOT COMMIT)
+k8s/secrets.yaml
+k8s/*-secret.yaml
+k8s/secret-*.yaml
+
+# Data directories
+/app/data/
+data/
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Docker
+.dockerignore
+
+# Go
+vendor/
+*.mod.sum
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+*_backup.*
+

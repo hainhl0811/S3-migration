@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "s3-migration.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "s3-migration.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "s3-migration.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "s3-migration.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "s3-migration.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.env.PORT | default 8000 }}
+          protocol: TCP
+        env:
+        - name: PORT
+          value: {{ .Values.env.PORT | quote }}
+        - name: GIN_MODE
+          value: {{ .Values.env.GIN_MODE | quote }}
+        {{- if .Values.secrets.encryptionKey }}
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "s3-migration.fullname" . }}-secrets
+              key: encryption-key
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.persistence.data.enabled }}
+        - name: data
+          mountPath: /app/data
+        {{- end }}
+        {{- if .Values.persistence.logs.enabled }}
+        - name: logs
+          mountPath: /app/logs
+        {{- end }}
+        {{- if .Values.persistence.state.enabled }}
+        - name: state
+          mountPath: /app/data/state
+        {{- end }}
+      volumes:
+      {{- if .Values.persistence.data.enabled }}
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.data.existingClaim | default (printf "%s-data" (include "s3-migration.fullname" .)) }}
+      {{- end }}
+      {{- if .Values.persistence.logs.enabled }}
+      - name: logs
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.logs.existingClaim | default (printf "%s-logs" (include "s3-migration.fullname" .)) }}
+      {{- end }}
+      {{- if .Values.persistence.state.enabled }}
+      - name: state
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.state.existingClaim | default (printf "%s-state" (include "s3-migration.fullname" .)) }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
