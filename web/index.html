@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S3 Migration Tool</title>
-    <link rel="stylesheet" href="/static/style.css?v=49">
+    <link rel="stylesheet" href="/static/style.css?v=50">
     <style>
         /* Discovery status indicator */
         .discovery-status {
@@ -420,7 +420,12 @@
         <div id="tasks-tab" class="tab-content">
             <div class="tasks-header">
                 <h2>Active Tasks</h2>
-                <button class="btn btn-small" onclick="refreshTasks()">Refresh</button>
+                <div class="tasks-actions">
+                    <button class="btn btn-small" onclick="refreshTasks()">Refresh</button>
+                    <button class="btn btn-warning btn-small" onclick="cleanupTasks('failed')">🗑️ Clean Failed</button>
+                    <button class="btn btn-success btn-small" onclick="cleanupTasks('completed')">🗑️ Clean Completed</button>
+                    <button class="btn btn-danger btn-small" onclick="cleanupTasks('all')">🗑️ Clean All</button>
+                </div>
             </div>
             <div id="tasksList" class="tasks-container">
                 <p class="loading">Loading tasks...</p>
@@ -439,7 +444,7 @@
         </div>
     </div>
 
-        <script src="/static/app.js?v=47"></script>
+        <script src="/static/app.js?v=48"></script>
     <script>
         // Initialize provider selectors on page load
         document.addEventListener('DOMContentLoaded', () => {

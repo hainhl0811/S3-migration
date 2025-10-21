@@ -691,6 +691,12 @@ body.dark-mode .mode-badge.incremental {
     margin-bottom: 16px;
 }
 
+.tasks-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
 /* Utility Classes */
 .loading {
     text-align: center;

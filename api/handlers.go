@@ -933,6 +933,91 @@ func CancelTask(c *gin.Context) {
 // RetryTask removed - credentials are not persisted for security reasons
 // Users should start a new migration which will automatically skip already copied files
 
+// CleanupTasks handles DELETE /api/tasks/cleanup/:status
+// @Summary Cleanup tasks by status
+// @Description Delete all tasks with a specific status (failed, completed, cancelled, or all)
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param status path string true "Task status to cleanup (failed, completed, cancelled, all)"
+// @Success 200 {object} gin.H
+// @Failure 400 {object} gin.H
+// @Router /tasks/cleanup/{status} [delete]
+func CleanupTasks(c *gin.Context) {
+	status := c.Param("status")
+	
+	// Validate status
+	validStatuses := map[string]bool{
+		"failed":    true,
+		"completed": true,
+		"cancelled": true,
+		"all":       true,
+	}
+	
+	if !validStatuses[status] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid status. Must be one of: failed, completed, cancelled, all",
+		})
+		return
+	}
+	
+	// Get all tasks
+	taskManager.mu.Lock()
+	tasksToDelete := []string{}
+	
+	for taskID, task := range taskManager.tasks {
+		// Skip running/pending tasks
+		if task.Status.Status == "running" || task.Status.Status == "pending" {
+			continue
+		}
+		
+		// Match status or delete all
+		if status == "all" || task.Status.Status == status {
+			tasksToDelete = append(tasksToDelete, taskID)
+		}
+	}
+	
+	// Delete from memory
+	for _, taskID := range tasksToDelete {
+		delete(taskManager.tasks, taskID)
+		
+		// Also delete from database
+		if taskManager.stateManager != nil {
+			if err := taskManager.stateManager.DeleteTask(taskID); err != nil {
+				fmt.Printf("Failed to delete task %s from database: %v\n", taskID, err)
+			}
+		}
+	}
+	taskManager.mu.Unlock()
+	
+	// Also cleanup from database for tasks not in memory
+	if taskManager.stateManager != nil && status == "all" {
+		// Get all tasks from database
+		dbTasks, err := taskManager.stateManager.ListTasks()
+		if err == nil {
+			for _, dbTask := range dbTasks {
+				// Skip running/pending tasks
+				if dbTask.Status == "running" || dbTask.Status == "pending" {
+					continue
+				}
+				
+				// Delete if matches status
+				if status == "all" || dbTask.Status == status {
+					if err := taskManager.stateManager.DeleteTask(dbTask.ID); err != nil {
+						fmt.Printf("Failed to delete task %s from database: %v\n", dbTask.ID, err)
+					}
+				}
+			}
+		}
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Cleaned up %d tasks with status: %s", len(tasksToDelete), status),
+		"deleted_count": len(tasksToDelete),
+		"status": status,
+	})
+}
+
 // HealthCheck handles GET /health
 // @Summary Health check
 // @Description Check if the API is running

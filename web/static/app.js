@@ -1213,6 +1213,38 @@ async function cancelTask(taskId) {
 // Retry removed - credentials not persisted for security
 // Users should start a new migration to resume (already copied files will be skipped)
 
+// Cleanup Tasks by Status
+async function cleanupTasks(status) {
+    const statusMessages = {
+        'failed': 'failed tasks',
+        'completed': 'completed tasks',
+        'all': 'ALL non-running tasks (failed, completed, and cancelled)'
+    };
+    
+    const message = statusMessages[status] || status + ' tasks';
+    
+    if (!confirm(`Are you sure you want to delete ${message}? This cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/tasks/cleanup/${status}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✅ Successfully cleaned up ${result.deleted_count} ${message}`);
+            refreshTasks();
+        } else {
+            const error = await response.json();
+            alert(`Failed to cleanup tasks: ${error.error || 'Unknown error'}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
 // Toggle Schedule
 async function toggleSchedule(scheduleId, enable) {
     const action = enable ? 'enable' : 'disable';
