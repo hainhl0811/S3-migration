@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: s3-migration
-        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.3.5
+        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.3.6
         imagePullPolicy: Always
         ports:
         - containerPort: 8000

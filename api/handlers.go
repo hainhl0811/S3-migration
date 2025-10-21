@@ -991,7 +991,8 @@ func CleanupTasks(c *gin.Context) {
 	taskManager.mu.Unlock()
 	
 	// Also cleanup from database for tasks not in memory
-	if taskManager.stateManager != nil && status == "all" {
+	totalDeleted := len(tasksToDelete)
+	if taskManager.stateManager != nil {
 		// Get all tasks from database
 		dbTasks, err := taskManager.stateManager.ListTasks()
 		if err == nil {
@@ -1005,6 +1006,9 @@ func CleanupTasks(c *gin.Context) {
 				if status == "all" || dbTask.Status == status {
 					if err := taskManager.stateManager.DeleteTask(dbTask.ID); err != nil {
 						fmt.Printf("Failed to delete task %s from database: %v\n", dbTask.ID, err)
+					} else {
+						totalDeleted++
+						fmt.Printf("Deleted task %s from database (status: %s)\n", dbTask.ID, dbTask.Status)
 					}
 				}
 			}
@@ -1012,8 +1016,8 @@ func CleanupTasks(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Cleaned up %d tasks with status: %s", len(tasksToDelete), status),
-		"deleted_count": len(tasksToDelete),
+		"message": fmt.Sprintf("Cleaned up %d tasks with status: %s", totalDeleted, status),
+		"deleted_count": totalDeleted,
 		"status": status,
 	})
 }
