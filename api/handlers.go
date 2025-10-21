@@ -790,7 +790,38 @@ func GetStatus(c *gin.Context) {
 	taskManager.mu.RUnlock()
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		// Task not in memory, check database
+		taskState, err := taskManager.stateManager.LoadTask(taskID)
+		if err != nil || taskState == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
+		
+		// Convert database task state to migration status
+		status := &models.MigrationStatus{
+			TaskID:        taskState.ID,
+			Status:        taskState.Status,
+			Progress:      taskState.Progress,
+			CopiedObjects: taskState.CopiedObjects,
+			TotalObjects:  taskState.TotalObjects,
+			CopiedSize:    taskState.CopiedSize,
+			TotalSize:     taskState.TotalSize,
+			CurrentSpeed:  taskState.CurrentSpeed,
+			ETA:           taskState.ETA,
+			Duration:      taskState.Duration,
+			Errors:        taskState.Errors,
+			StartTime:     taskState.StartTime,
+			MigrationType: taskState.MigrationType,
+			DryRun:        taskState.DryRun,
+			LastUpdateTime: time.Now(), // Set to current time for database tasks
+		}
+		
+		// Handle EndTime conversion from pointer to value
+		if taskState.EndTime != nil {
+			status.EndTime = *taskState.EndTime
+		}
+		
+		c.JSON(http.StatusOK, status)
 		return
 	}
 
@@ -806,10 +837,32 @@ func GetStatus(c *gin.Context) {
 // @Router /api/tasks [get]
 func ListTasks(c *gin.Context) {
 	taskManager.mu.RLock()
-	defer taskManager.mu.RUnlock()
-
-	taskIDs := make([]string, 0, len(taskManager.tasks))
+	memoryTaskIDs := make([]string, 0, len(taskManager.tasks))
 	for id := range taskManager.tasks {
+		memoryTaskIDs = append(memoryTaskIDs, id)
+	}
+	taskManager.mu.RUnlock()
+
+	// Get all tasks from database
+	dbTasks, err := taskManager.stateManager.ListTasks()
+	if err != nil {
+		// If database fails, fall back to memory-only
+		c.JSON(http.StatusOK, memoryTaskIDs)
+		return
+	}
+
+	// Combine memory and database task IDs
+	taskIDSet := make(map[string]bool)
+	for _, id := range memoryTaskIDs {
+		taskIDSet[id] = true
+	}
+	for _, taskState := range dbTasks {
+		taskIDSet[taskState.ID] = true
+	}
+
+	// Convert set back to slice
+	taskIDs := make([]string, 0, len(taskIDSet))
+	for id := range taskIDSet {
 		taskIDs = append(taskIDs, id)
 	}
 
