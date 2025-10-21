@@ -558,6 +558,37 @@ body.dark-mode .mode-badge.incremental {
     margin-bottom: 32px;
 }
 
+/* Fix region dropdown sizing */
+#sourceRegionGroup,
+#destRegionGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+#sourceRegionGroup select,
+#destRegionGroup select,
+#sourceRegionGroup input,
+#destRegionGroup input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border 0.2s;
+    box-sizing: border-box;
+}
+
+#sourceRegionGroup select:focus,
+#destRegionGroup select:focus,
+#sourceRegionGroup input:focus,
+#destRegionGroup input:focus {
+    border-color: var(--accent);
+}
+
 .form-section h3 {
     font-size: 14px;
     font-weight: 600;
