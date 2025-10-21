@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: s3-migration
-        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.3.6
+        image: registry.gitlab.com/hainhl0811/cmc-example-deploy/s3-migration:v2.4.1-single-worker
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -30,6 +30,10 @@ spec:
           value: "8000"
         - name: GIN_MODE
           value: "release"
+        - name: GOMEMLIMIT
+          value: "1800MiB"  # Set Go memory limit to 90% of 2Gi limit (prevents OOM)
+        - name: GOGC
+          value: "50"  # Aggressive garbage collection (default 100)
         - name: ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
@@ -61,7 +65,7 @@ spec:
             memory: "512Mi"
             cpu: "500m"
           limits:
-            memory: "4Gi"
+            memory: "2Gi"  # Reduced from 8Gi - node only has 8GB total
             cpu: "2000m"
         livenessProbe:
           httpGet:

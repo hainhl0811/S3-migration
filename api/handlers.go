@@ -88,7 +88,7 @@ func (tm *TaskManager) loadExistingTasks() error {
 	defer tm.mu.Unlock()
 
 	for _, taskState := range tasks {
-		// Only load running tasks (completed tasks are for history only)
+		// Only load running tasks into memory (failed/completed tasks stay in DB only)
 		if taskState.Status == "running" {
 			// Mark as failed since pod restarted mid-migration
 			taskState.Status = "failed"
@@ -98,32 +98,32 @@ func (tm *TaskManager) loadExistingTasks() error {
 			
 			// Save updated state
 			tm.stateManager.SaveTask(taskState)
-		}
-		
-		// Convert to MigrationStatus for in-memory storage
-		status := &models.MigrationStatus{
-			TaskID:        taskState.ID,
-			Status:        taskState.Status,
-			Progress:      taskState.Progress,
-			CopiedObjects: taskState.CopiedObjects,
-			TotalObjects:  taskState.TotalObjects,
-			CopiedSize:    taskState.CopiedSize,
-			TotalSize:     taskState.TotalSize,
-			CurrentSpeed:  taskState.CurrentSpeed,
-			ETA:           taskState.ETA,
-			Duration:      taskState.Duration,
-			Errors:        taskState.Errors,
-			MigrationType: taskState.MigrationType,
-			DryRun:        taskState.DryRun,
-		}
+			
+			// Convert to MigrationStatus for in-memory storage
+			status := &models.MigrationStatus{
+				TaskID:        taskState.ID,
+				Status:        taskState.Status,
+				Progress:      taskState.Progress,
+				CopiedObjects: taskState.CopiedObjects,
+				TotalObjects:  taskState.TotalObjects,
+				CopiedSize:    taskState.CopiedSize,
+				TotalSize:     taskState.TotalSize,
+				CurrentSpeed:  taskState.CurrentSpeed,
+				ETA:           taskState.ETA,
+				Duration:      taskState.Duration,
+				Errors:        taskState.Errors,
+				MigrationType: taskState.MigrationType,
+				DryRun:        taskState.DryRun,
+			}
 
-		tm.tasks[taskState.ID] = &TaskInfo{
-			ID:        taskState.ID,
-			Status:    status,
-			StartTime: taskState.StartTime,
-		}
+			tm.tasks[taskState.ID] = &TaskInfo{
+				ID:        taskState.ID,
+				Status:    status,
+				StartTime: taskState.StartTime,
+			}
 
-		fmt.Printf("Loaded task %s from database (status: %s)\n", taskState.ID, taskState.Status)
+			fmt.Printf("Loaded task %s from database (status: %s)\n", taskState.ID, taskState.Status)
+		}
 	}
 
 	return nil

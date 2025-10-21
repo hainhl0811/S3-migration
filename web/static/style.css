@@ -244,33 +244,45 @@ button:disabled {
     gap: 16px;
 }
 
-/* Force destination credentials row to have same width as source */
+/* Filter row with 4 columns */
+.filter-row {
+    grid-template-columns: 1fr 1fr 1fr auto;
+    align-items: end;
+}
+
+/* Ensure all credential input boxes are consistent */
+#sourceS3Credentials,
 #destCredentialsRow {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 16px !important;
-    width: 100% !important;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
 }
 
-/* Ensure destination credential fields have same width as source */
+#sourceS3Credentials .form-group,
 #destCredentialsRow .form-group {
-    width: 100% !important;
-    margin-bottom: 20px !important;
+    width: 100%;
+    margin-bottom: 20px;
 }
 
+#sourceS3Credentials .form-group input,
 #destCredentialsRow .form-group input {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    padding: 8px 12px !important;
-    font-size: 14px !important;
-    line-height: 20px !important;
-    color: var(--text-primary) !important;
-    background: var(--bg-primary) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 6px !important;
-    outline: none !important;
-    transition: border 0.2s !important;
-    margin: 0 !important;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border 0.2s;
+    margin: 0;
+}
+
+#sourceS3Credentials .form-group input:focus,
+#destCredentialsRow .form-group input:focus {
+    border-color: var(--accent);
 }
 
 .form-actions {

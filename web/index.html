@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S3 Migration Tool</title>
-    <link rel="stylesheet" href="/static/style.css?v=50">
+    <link rel="stylesheet" href="/static/style.css?v=52">
     <style>
         /* Discovery status indicator */
         .discovery-status {
@@ -427,6 +427,34 @@
                     <button class="btn btn-danger btn-small" onclick="cleanupTasks('all')">🗑️ Clean All</button>
                 </div>
             </div>
+            <!-- Date Filter -->
+            <div class="form-section">
+                <h3>📅 Filter by Date</h3>
+                <div class="form-row filter-row">
+                    <div class="form-group">
+                        <label>From Date</label>
+                        <input type="date" id="filterFromDate" onchange="applyDateFilter()">
+                    </div>
+                    <div class="form-group">
+                        <label>To Date</label>
+                        <input type="date" id="filterToDate" onchange="applyDateFilter()">
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="filterStatus" onchange="applyDateFilter()">
+                            <option value="">All Status</option>
+                            <option value="running">Running</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-secondary btn-small" onclick="clearDateFilter()">Clear</button>
+                    </div>
+                </div>
+            </div>
+            
             <div id="tasksList" class="tasks-container">
                 <p class="loading">Loading tasks...</p>
             </div>
@@ -444,7 +472,7 @@
         </div>
     </div>
 
-        <script src="/static/app.js?v=48"></script>
+        <script src="/static/app.js?v=51"></script>
     <script>
         // Initialize provider selectors on page load
         document.addEventListener('DOMContentLoaded', () => {

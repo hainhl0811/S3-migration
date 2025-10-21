@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"s3migration/pkg/adaptive"
 	"s3migration/pkg/models"
 	"s3migration/pkg/network"
 )
@@ -33,6 +34,7 @@ type Tuner struct {
 	minWorkers          int
 	maxWorkers          int
 	networkMonitor      *network.Monitor
+	memoryManager       *adaptive.MemoryManager // Memory-aware worker management
 	performanceSamples  []PerformanceSample
 	sizeDistribution    []int64
 	adjustmentThreshold int
@@ -44,18 +46,26 @@ type Tuner struct {
 	workerConfigs       map[models.WorkloadPattern]WorkerConfig
 }
 
-// NewTuner creates a new performance tuner
+// NewTuner creates a new performance tuner with adaptive memory management
 func NewTuner() *Tuner {
+	// Create memory manager for dynamic worker adjustment
+	memMgr := adaptive.NewMemoryManager()
+	
+	// Get memory-aware max workers
+	maxWorkers := memMgr.GetMaxWorkers()
+	
+	// All patterns now use memory-aware limits (no hardcoded differences)
 	configs := map[models.WorkloadPattern]WorkerConfig{
-		models.PatternManySmall:  {Min: 20, Max: 100, Default: 30},
-		models.PatternMixed:      {Min: 10, Max: 50, Default: 20},
-		models.PatternLargeFiles: {Min: 3, Max: 15, Default: 5},
-		models.PatternUnknown:    {Min: 5, Max: 50, Default: 10},
+		models.PatternManySmall:  {Min: 1, Max: maxWorkers, Default: 1},
+		models.PatternMixed:      {Min: 1, Max: maxWorkers, Default: 1},
+		models.PatternLargeFiles: {Min: 1, Max: maxWorkers, Default: 1}, // Memory manager will limit appropriately
+		models.PatternUnknown:    {Min: 1, Max: maxWorkers, Default: 1},
 	}
 
 	t := &Tuner{
 		currentPattern:      models.PatternUnknown,
 		networkMonitor:      network.NewMonitor(),
+		memoryManager:       memMgr, // Memory-aware management
 		performanceSamples:  make([]PerformanceSample, 0),
 		sizeDistribution:    make([]int64, 0),
 		adjustmentThreshold: 5,
@@ -67,6 +77,8 @@ func NewTuner() *Tuner {
 	t.minWorkers = config.Min
 	t.maxWorkers = config.Max
 	t.currentWorkers.Store(int32(config.Default))
+	
+	fmt.Printf("📊 Tuner initialized with memory-aware limits (max: %d workers)\n", maxWorkers)
 
 	return t
 }
@@ -188,7 +200,22 @@ func (t *Tuner) ShouldAdjust() bool {
 
 // GetOptimalWorkers calculates optimal worker count
 func (t *Tuner) GetOptimalWorkers() int {
+	// PRIORITY 1: Check memory constraints first!
+	current := int(t.currentWorkers.Load())
+	t.memoryManager.RecordMemoryUsage(current)
+	
+	// Get memory-safe worker count
+	memorySafeWorkers := t.memoryManager.GetOptimalWorkers()
+	
+	// Force GC if memory is high
+	t.memoryManager.ForceGCIfNeeded()
+	
 	if !t.ShouldAdjust() {
+		// Even if not adjusting for performance, respect memory limits
+		if memorySafeWorkers < current {
+			t.currentWorkers.Store(int32(memorySafeWorkers))
+			fmt.Printf("⚠️  Reducing workers to %d due to memory constraints\n", memorySafeWorkers)
+		}
 		return int(t.currentWorkers.Load())
 	}
 
@@ -201,16 +228,9 @@ func (t *Tuner) GetOptimalWorkers() int {
 		workerSpeeds[sample.Workers] = append(workerSpeeds[sample.Workers], sample.Speed)
 	}
 
-	// Calculate optimal based on pattern
-	var optimalWorkers int
-	switch t.currentPattern {
-	case models.PatternManySmall:
-		optimalWorkers = t.optimizeForSmallFiles(workerSpeeds)
-	case models.PatternLargeFiles:
-		optimalWorkers = t.optimizeForLargeFiles(workerSpeeds)
-	default:
-		optimalWorkers = t.optimizeForMixedWorkload(workerSpeeds)
-	}
+	// Memory manager handles optimization - no pattern-specific logic needed
+	// Start with current workers and let memory manager adjust
+	optimalWorkers := int(t.currentWorkers.Load())
 
 	// Apply network recommendations
 	networkRecommended := t.networkMonitor.GetRecommendedWorkers(optimalWorkers)
@@ -222,11 +242,16 @@ func (t *Tuner) GetOptimalWorkers() int {
 		optimalWorkers = (optimalWorkers + networkRecommended) / 2
 	}
 
+	// CRITICAL: Memory limits take priority over performance optimization!
+	if optimalWorkers > memorySafeWorkers {
+		optimalWorkers = memorySafeWorkers
+		fmt.Printf("⚠️  Worker count capped at %d by memory manager\n", memorySafeWorkers)
+	}
+
 	// Apply bounds
 	boundedWorkers := max(t.minWorkers, min(optimalWorkers, t.maxWorkers))
 
 	// Gradual adjustment
-	current := int(t.currentWorkers.Load())
 	if boundedWorkers > current {
 		t.currentWorkers.Store(int32(min(current+2, boundedWorkers)))
 	} else if boundedWorkers < current {
@@ -237,55 +262,7 @@ func (t *Tuner) GetOptimalWorkers() int {
 	return int(t.currentWorkers.Load())
 }
 
-func (t *Tuner) optimizeForSmallFiles(workerSpeeds map[int][]float64) int {
-	maxSpeed := 0.0
-	optimalWorkers := int(t.currentWorkers.Load())
-
-	for workers, speeds := range workerSpeeds {
-		avgSpeed := avg(speeds)
-		if avgSpeed > maxSpeed {
-			maxSpeed = avgSpeed
-			optimalWorkers = workers
-		}
-	}
-
-	// Bias towards more workers for small files
-	return min(optimalWorkers+5, t.maxWorkers)
-}
-
-func (t *Tuner) optimizeForLargeFiles(workerSpeeds map[int][]float64) int {
-	maxSpeed := 0.0
-	optimalWorkers := int(t.currentWorkers.Load())
-
-	for workers, speeds := range workerSpeeds {
-		if workers > t.maxWorkers/2 {
-			continue
-		}
-		avgSpeed := avg(speeds)
-		if avgSpeed > maxSpeed {
-			maxSpeed = avgSpeed
-			optimalWorkers = workers
-		}
-	}
-
-	return optimalWorkers
-}
-
-func (t *Tuner) optimizeForMixedWorkload(workerSpeeds map[int][]float64) int {
-	weightedSpeed := 0.0
-	optimalWorkers := int(t.currentWorkers.Load())
-
-	for workers, speeds := range workerSpeeds {
-		avgSpeed := avg(speeds)
-		weighted := avgSpeed * (1 - float64(workers)/float64(t.maxWorkers)*0.3)
-		if weighted > weightedSpeed {
-			weightedSpeed = weighted
-			optimalWorkers = workers
-		}
-	}
-
-	return optimalWorkers
-}
+// Old optimization functions removed - memory manager handles all optimization
 
 // GetCurrentWorkers returns current worker count
 func (t *Tuner) GetCurrentWorkers() int {

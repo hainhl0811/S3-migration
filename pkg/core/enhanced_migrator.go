@@ -1,11 +1,9 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"os/signal"
@@ -691,23 +689,17 @@ func (m *EnhancedMigrator) crossAccountCopy(ctx context.Context, sourceClient, d
 	}
 	defer getResp.Body.Close()
 	
-	// Read the entire body into memory to ensure we can retry if needed
-	// The body stream can only be read once, so we buffer it
-	bodyBytes, err := io.ReadAll(getResp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read object body: %w", err)
-	}
-	fmt.Printf("[CROSS-ACCOUNT] Downloaded %d bytes from source\n", len(bodyBytes))
-	
-	fmt.Printf("[CROSS-ACCOUNT] Uploading to destination: %s/%s\n", destBucket, destKey)
+	// CRITICAL: Use streaming instead of buffering to prevent OOM
+	// DO NOT use io.ReadAll - stream directly from source to destination
+	fmt.Printf("[CROSS-ACCOUNT] Streaming to destination (no buffering): %s/%s\n", destBucket, destKey)
 	
 	// Put object to destination with ONLY required fields
 	// CMC S3 might reject requests with optional metadata/headers
 	putInput := &s3.PutObjectInput{
-		Bucket: aws.String(destBucket),
-		Key:    aws.String(destKey),
-		Body:   bytes.NewReader(bodyBytes),
-		// Do NOT set ContentLength - let the SDK calculate it
+		Bucket:        aws.String(destBucket),
+		Key:           aws.String(destKey),
+		Body:          getResp.Body, // Stream directly - no buffering!
+		ContentLength: aws.Int64(objectSize), // Set size since we know it
 		// Do NOT set ContentType - CMC might reject it
 		// Do NOT set ACL - use account default
 	}

@@ -83,12 +83,12 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 	fmt.Printf("   Using ClientID: %s...\n", clientID[:20])
 	fmt.Printf("   Tokens will auto-refresh when expired\n")
 
-	// Create optimized HTTP client for high throughput (750 GB/day target)
-	// Supports 50 concurrent workers for maximum download speed
+	// CRITICAL: Absolute minimum HTTP client - single worker mode
+	// Even 3 workers exceeded 2Gi limit
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        200,               // Increased for 50 workers
-			MaxIdleConnsPerHost: 100,               // Increased to support 50 concurrent downloads
+			MaxIdleConns:        4,                 // Absolute minimum for 1 worker
+			MaxIdleConnsPerHost: 2,                 // Absolute minimum
 			IdleConnTimeout:     90 * time.Second,  // Keep connections alive longer
 			TLSHandshakeTimeout: 10 * time.Second,  // Faster TLS handshake
 			DisableCompression:  false,             // Enable compression for efficiency

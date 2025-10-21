@@ -20,13 +20,13 @@ function startAutoRefresh() {
         clearInterval(autoRefreshInterval);
     }
     
-    // Auto-refresh every 5 seconds when on tasks tab
+    // Auto-refresh every 15 seconds when on tasks tab (reduced frequency for better UX)
     autoRefreshInterval = setInterval(() => {
         const tasksTab = document.getElementById('tasks-tab');
         if (tasksTab && tasksTab.classList.contains('active')) {
             refreshTasks();
         }
-    }, 5000); // 5 seconds instead of constant refresh
+    }, 15000); // 15 seconds for better UX
 }
 
 function stopAutoRefresh() {
@@ -934,6 +934,9 @@ async function refreshTasks() {
         
         const tasks = (await Promise.all(taskPromises)).filter(t => t !== null);
         
+        // Store all tasks for filtering
+        allTasks = tasks;
+        
         // Sort tasks consistently: running first, then by start time (newest first)
         tasks.sort((a, b) => {
             // Priority 1: Running/pending tasks first
@@ -951,7 +954,8 @@ async function refreshTasks() {
         if (tasks.length === 0) {
             tasksList.innerHTML = '<p class="text-muted">No active tasks</p>';
         } else {
-            tasksList.innerHTML = tasks.map(task => createTaskCard(task)).join('');
+            // Apply current filter if any
+            applyDateFilter();
         }
     } catch (error) {
         const errorMsg = error.message || 'Unknown error';
@@ -1066,6 +1070,22 @@ function createTaskCard(task) {
                     <span class="detail-label">${(task.status === 'completed' || task.status === 'completed_with_errors') && task.duration ? 'Total Time' : 'ETA'}</span>
                     <span class="detail-value">${(task.status === 'completed' || task.status === 'completed_with_errors') && task.duration ? task.duration : (task.eta || 'calculating...')}</span>
                 </div>
+                <div class="detail-item">
+                    <span class="detail-label">Started</span>
+                    <span class="detail-value">${task.start_time ? formatDate(task.start_time) : 'Unknown'}</span>
+                </div>
+                ${task.end_time ? `
+                <div class="detail-item">
+                    <span class="detail-label">Completed</span>
+                    <span class="detail-value">${formatDate(task.end_time)}</span>
+                </div>
+                ` : ''}
+                ${task.status === 'running' ? `
+                <div class="detail-item">
+                    <span class="detail-label">Running For</span>
+                    <span class="detail-value">${task.start_time ? getDuration(task.start_time) : 'Unknown'}</span>
+                </div>
+                ` : ''}
             </div>
             ${(task.eta === 'discovering...' || task.eta === 'starting upload...') ? `
                 <div class="discovery-status">
@@ -1808,13 +1828,87 @@ function formatDate(dateStr) {
     return date.toLocaleString();
 }
 
-// Auto-refresh tasks if any are running
-setInterval(() => {
-    const tasksTab = document.getElementById('tasks-tab');
-    if (tasksTab.classList.contains('active')) {
-        refreshTasks();
+// Calculate duration from start time to now
+function getDuration(startTimeStr) {
+    if (!startTimeStr) return 'Unknown';
+    const startTime = new Date(startTimeStr);
+    const now = new Date();
+    const diffMs = now - startTime;
+    
+    const seconds = Math.floor(diffMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+        return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
     }
-}, 5000); // Refresh every 5 seconds if on tasks tab
+}
+
+// Date filter functionality
+let allTasks = []; // Store all tasks for filtering
+
+function applyDateFilter() {
+    const fromDate = document.getElementById('filterFromDate').value;
+    const toDate = document.getElementById('filterToDate').value;
+    const status = document.getElementById('filterStatus').value;
+    
+    let filteredTasks = allTasks;
+    
+    // Filter by date range
+    if (fromDate) {
+        const from = new Date(fromDate);
+        filteredTasks = filteredTasks.filter(task => {
+            const taskDate = new Date(task.start_time);
+            return taskDate >= from;
+        });
+    }
+    
+    if (toDate) {
+        const to = new Date(toDate + 'T23:59:59'); // Include entire day
+        filteredTasks = filteredTasks.filter(task => {
+            const taskDate = new Date(task.start_time);
+            return taskDate <= to;
+        });
+    }
+    
+    // Filter by status
+    if (status) {
+        filteredTasks = filteredTasks.filter(task => task.status === status);
+    }
+    
+    // Display filtered tasks
+    displayFilteredTasks(filteredTasks);
+}
+
+function clearDateFilter() {
+    document.getElementById('filterFromDate').value = '';
+    document.getElementById('filterToDate').value = '';
+    document.getElementById('filterStatus').value = '';
+    
+    // Show all tasks
+    displayFilteredTasks(allTasks);
+}
+
+function displayFilteredTasks(tasks) {
+    const tasksList = document.getElementById('tasksList');
+    
+    if (!tasks || tasks.length === 0) {
+        tasksList.innerHTML = '<p class="text-muted">No tasks match the filter criteria</p>';
+        return;
+    }
+    
+    // Use existing createTaskCard function for consistency
+    tasksList.innerHTML = tasks.map(task => createTaskCard(task)).join('');
+}
+
+// Auto-refresh tasks handled by startAutoRefresh() function - no duplicate intervals
 
 // Auto-refresh schedules
 setInterval(() => {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -87,11 +89,10 @@ func (m *GoogleDriveMigrator) Migrate(input MigrationInput) (*MigrationResult, e
 	m.bytesPerSecond = 0
 	m.lastUpdate = time.Now()
 	
-	// Aggressive parallel downloads for maximum throughput
-	// With fast concurrent discovery, we can now focus all resources on downloads
-	// Google Drive allows high concurrent downloads (100+ simultaneous connections)
-	// Target: Saturate available bandwidth and approach 750 GB/day limit
-	numCopyWorkers := 50 // Increased from 15 to maximize download throughput
+	// CRITICAL: Single worker mode - even 3 workers exceeded 2Gi limit
+	// 50 workers → 25 → 10 → 3 all caused OOM
+	// This is the absolute minimum - one file at a time
+	numCopyWorkers := 1 // Single worker - absolute minimum
 	
 	fmt.Printf("📋 Phase 1: Discovering all files (fast discovery without upload throttling)...\n")
 	
@@ -650,26 +651,18 @@ func (m *GoogleDriveMigrator) copyFileToS3(file FileInfo, bucket, key string) er
 	}
 	defer reader.Close()
 
-	// For small files (< 10MB), buffer in memory to enable retries
-	// For large files, we'll use streaming but handle retries differently
+	// EMERGENCY: Force streaming mode for ALL files to prevent OOM
+	// Even with 5MB buffer and 10 workers, we hit 7GB memory usage
+	// Disabling ALL buffering to use pure streaming mode
 	var body io.Reader
 	var actualSize int64
 	
-	if file.Size > 0 && file.Size < 10*1024*1024 { // Less than 10MB
-		// Buffer small files in memory for retry capability
-		data, err := io.ReadAll(reader)
-		if err != nil {
-			return fmt.Errorf("failed to read file data: %w", err)
-		}
-		body = bytes.NewReader(data)
-		actualSize = int64(len(data)) // Use actual buffered size
-		// Reduced logging for better UX - only log occasionally
-	} else {
-		// For large files, use streaming (no retry capability but memory efficient)
-		body = reader
-		actualSize = file.Size // Use original size for streaming
-		// Reduced logging for better UX
-	}
+	// Force streaming for ALL files (no buffering at all)
+	body = reader
+	actualSize = file.Size
+	
+	// Note: This sacrifices retry capability for memory safety
+	// If uploads fail, they'll need to be retried as new migrations
 
 	// Prepare PutObject input with S3-compatible optimizations
 	putInput := &s3.PutObjectInput{
@@ -719,12 +712,25 @@ func (m *GoogleDriveMigrator) copyFileToS3(file FileInfo, bucket, key string) er
 		// Log performance every 100MB transferred
 		if m.totalBytes%(100*1024*1024) < actualSize {
 			currentSpeed := m.bytesPerSecond / (1024 * 1024) // Convert to MB/s
-			fmt.Printf("📊 Bandwidth: %.1f MB/s (Total: %.1f GB transferred)\n", 
-				currentSpeed, float64(m.totalBytes)/(1024*1024*1024))
+			
+			// EMERGENCY: Log memory usage to debug OOM
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+			memUsageMB := float64(memStats.Alloc) / (1024 * 1024)
+			
+			fmt.Printf("📊 Bandwidth: %.1f MB/s | Memory: %.1f MB | Total: %.1f GB transferred\n", 
+				currentSpeed, memUsageMB, float64(m.totalBytes)/(1024*1024*1024))
 			
 			// Check if we're approaching the 750 GB/day limit
 			if currentSpeed > 35.0 { // 35 MB/s = ~3TB/day (safety margin)
 				fmt.Printf("⚠️  High bandwidth detected (%.1f MB/s) - approaching Google Drive limits\n", currentSpeed)
+			}
+			
+			// Force garbage collection if memory usage is high
+			if memUsageMB > 1000 { // Over 1GB
+				runtime.GC()
+				debug.FreeOSMemory()
+				fmt.Printf("🗑️  Forced garbage collection (memory was %.1f MB)\n", memUsageMB)
 			}
 		}
 	}
@@ -801,7 +807,7 @@ func (m *GoogleDriveMigrator) processFilesStreaming(folderID string, includeShar
 	}
 
 	// Concurrent folder processing with worker pool
-	const maxConcurrentFolders = 10 // Process up to 10 folders concurrently
+	const maxConcurrentFolders = 2 // Reduced from 10 to minimize memory usage
 	folderQueue := make(chan string, 100)
 	var wg sync.WaitGroup
 	var discoveryErr error
