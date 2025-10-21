@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S3 Migration Tool</title>
-    <link rel="stylesheet" href="/static/style.css?v=52">
+    <link rel="stylesheet" href="/static/style.css?v=53">
     <style>
         /* Discovery status indicator */
         .discovery-status {
@@ -427,32 +427,17 @@
                     <button class="btn btn-danger btn-small" onclick="cleanupTasks('all')">🗑️ Clean All</button>
                 </div>
             </div>
-            <!-- Date Filter -->
-            <div class="form-section">
-                <h3>📅 Filter by Date</h3>
-                <div class="form-row filter-row">
-                    <div class="form-group">
-                        <label>From Date</label>
-                        <input type="date" id="filterFromDate" onchange="applyDateFilter()">
-                    </div>
-                    <div class="form-group">
-                        <label>To Date</label>
-                        <input type="date" id="filterToDate" onchange="applyDateFilter()">
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select id="filterStatus" onchange="applyDateFilter()">
-                            <option value="">All Status</option>
-                            <option value="running">Running</option>
-                            <option value="completed">Completed</option>
-                            <option value="failed">Failed</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button class="btn btn-secondary btn-small" onclick="clearDateFilter()">Clear</button>
-                    </div>
-                </div>
+            <!-- Simple Filter -->
+            <div class="filter-bar">
+                <input type="date" id="filterFromDate" onchange="applyDateFilter()" placeholder="From">
+                <input type="date" id="filterToDate" onchange="applyDateFilter()" placeholder="To">
+                <select id="filterStatus" onchange="applyDateFilter()">
+                    <option value="">All</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                </select>
+                <button class="btn btn-secondary btn-small" onclick="clearDateFilter()">Clear</button>
             </div>
             
             <div id="tasksList" class="tasks-container">
@@ -472,7 +457,7 @@
         </div>
     </div>
 
-        <script src="/static/app.js?v=51"></script>
+        <script src="/static/app.js?v=52"></script>
     <script>
         // Initialize provider selectors on page load
         document.addEventListener('DOMContentLoaded', () => {
