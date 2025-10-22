@@ -43,7 +43,7 @@ func NewMemoryManager() *MemoryManager {
 	
 	mm := &MemoryManager{
 		maxMemoryMiB:       maxMemory,
-		safeThresholdPct:   0.85, // Use max 85% of available memory (more aggressive for small objects)
+		safeThresholdPct:   0.90, // Use max 90% of available memory (ultra-aggressive for small objects)
 		currentWorkers:     1,
 		minWorkers:         1,
 		maxWorkers:         100, // Will be adjusted based on memory
@@ -109,7 +109,7 @@ func (mm *MemoryManager) RecordMemoryUsage(workers int) {
 		avgMemory := average(mm.memoryHistory)
 		mm.estimatedPerWorker = avgMemory / int64(workers)
 		if mm.estimatedPerWorker < 50 {
-			mm.estimatedPerWorker = 5  // Optimized for small objects (100KB) - 5 MiB per worker
+			mm.estimatedPerWorker = 2  // Ultra-optimized for small objects (100KB) - 2 MiB per worker
 		}
 	}
 }
