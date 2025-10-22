@@ -209,16 +209,14 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 		fileSizes[i] = obj.Size
 	}
 
-	// Feed file sizes to tuner for workload analysis and optimization
-	m.tuner.AnalyzeWorkload(fileSizes)
-	
-	// Get optimized worker count based on detected workload pattern
-	optimalWorkers := m.tuner.GetOptimalWorkers()
+	// SIMPLIFIED: Use FIXED worker count - adaptive logic is broken
+	// Calculate based on available memory: 3GB / 3MB per worker = 1000 workers
+	optimalWorkers := 200  // FIXED: 200 workers for consistent performance
 	
 	// Calculate average file size for logging
 	avgFileSizeMB := float64(totalSize) / float64(len(objects)) / 1024 / 1024
 	fmt.Printf("Workload analysis: %d files, avg size: %.2f MB\n", len(objects), avgFileSizeMB)
-	fmt.Printf("Using %d workers (auto-tuned for optimal performance)\n", optimalWorkers)
+	fmt.Printf("🚀 USING FIXED %d WORKERS (adaptive system disabled)\n", optimalWorkers)
 
 	// If dry run, just return the analysis
 	if input.DryRun {
