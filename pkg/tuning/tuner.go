@@ -53,6 +53,7 @@ func NewTuner() *Tuner {
 	
 	// Get memory-aware max workers
 	maxWorkers := memMgr.GetMaxWorkers()
+	fmt.Printf("🔧 Memory Manager: max workers = %d\n", maxWorkers)
 	
 	// All patterns now use memory-aware limits (no hardcoded differences)
 	// Start with aggressive defaults - memory manager will limit if needed
@@ -61,12 +62,20 @@ func NewTuner() *Tuner {
 		defaultWorkers = min(50, maxWorkers) // At least 50 workers
 	}
 	
+	// Ensure large files default is at least 5
+	largeFilesDefault := defaultWorkers / 2
+	if largeFilesDefault < 5 {
+		largeFilesDefault = min(5, maxWorkers)
+	}
+	
 	configs := map[models.WorkloadPattern]WorkerConfig{
 		models.PatternManySmall:  {Min: 10, Max: maxWorkers, Default: defaultWorkers},
 		models.PatternMixed:      {Min: 10, Max: maxWorkers, Default: defaultWorkers},
-		models.PatternLargeFiles: {Min: 5, Max: maxWorkers, Default: defaultWorkers / 2}, // Memory manager will limit appropriately
+		models.PatternLargeFiles: {Min: 5, Max: maxWorkers, Default: largeFilesDefault},
 		models.PatternUnknown:    {Min: 10, Max: maxWorkers, Default: defaultWorkers},
 	}
+	
+	fmt.Printf("🔧 Worker config: default=%d, max=%d\n", defaultWorkers, maxWorkers)
 
 	t := &Tuner{
 		currentPattern:      models.PatternUnknown,
