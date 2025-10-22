@@ -389,7 +389,8 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 		// Call progress callback for real-time updates
 		if input.ProgressCallback != nil {
 			totalObjects := int64(len(objects))
-			currentProgress := float64(copied.Load()) / float64(totalObjects) * 100.0
+			// FIXED: Use totalCopied instead of copied.Load() to avoid race conditions
+			currentProgress := float64(totalCopied) / float64(totalObjects) * 100.0
 			
 			// Calculate speed and ETA
 			elapsed := time.Since(startTime).Seconds()
@@ -401,7 +402,7 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 				currentSpeed = float64(totalCopiedSize) / elapsed / 1024 / 1024
 				
 				// Calculate ETA
-				remaining := totalObjects - copied.Load()
+				remaining := totalObjects - totalCopied
 				if remaining > 0 && currentSpeed > 0 {
 					// Estimate remaining bytes based on average file size
 					avgFileSize := float64(totalSize) / float64(totalObjects)
@@ -421,7 +422,7 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 				}
 			}
 			
-			input.ProgressCallback(currentProgress, copied.Load(), totalObjects, currentSpeed, eta)
+			input.ProgressCallback(currentProgress, totalCopied, totalObjects, currentSpeed, eta)
 		}
 	}
 
