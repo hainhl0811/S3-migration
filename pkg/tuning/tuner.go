@@ -91,9 +91,15 @@ func NewTuner() *Tuner {
 	config := configs[models.PatternUnknown]
 	t.minWorkers = config.Min
 	t.maxWorkers = config.Max
-	t.currentWorkers.Store(int32(config.Default))
 	
-	fmt.Printf("📊 Tuner initialized with memory-aware limits (max: %d workers)\n", maxWorkers)
+	// FORCE high worker count - bypass gradual ramping
+	initialWorkers := config.Default
+	if initialWorkers < 100 {
+		initialWorkers = min(100, maxWorkers) // Force at least 100 workers
+	}
+	t.currentWorkers.Store(int32(initialWorkers))
+	
+	fmt.Printf("📊 Tuner initialized: workers=%d (forced min 100), max=%d\n", initialWorkers, maxWorkers)
 
 	return t
 }
