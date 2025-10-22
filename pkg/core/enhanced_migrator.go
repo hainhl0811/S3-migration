@@ -37,6 +37,10 @@ type EnhancedMigrator struct {
 	integrityManager *state.IntegrityManager
 	config           EnhancedMigratorConfig
 	stopRequested    atomic.Bool
+	// Rclone-inspired optimizations
+	streamingOptimizer    *StreamingOptimizer
+	memoryEstimator       *DynamicMemoryEstimator
+	priorityWorkloadMgr   *PriorityWorkloadManager
 }
 
 // EnhancedMigratorConfig contains configuration for the enhanced migrator
@@ -54,6 +58,11 @@ type EnhancedMigratorConfig struct {
 	SecretKey          string
 	TaskID             string
 	IntegrityManager   *state.IntegrityManager
+	// Rclone-inspired optimizations
+	EnablePriorityQueues    bool
+	EnableDynamicMemory     bool
+	EnableStreamingOptimizer bool
+	ChunkWorkers            int
 }
 
 // NewEnhancedMigrator creates a new enhanced migrator with all optimizations
@@ -94,6 +103,38 @@ func NewEnhancedMigrator(ctx context.Context, config EnhancedMigratorConfig) (*E
 	// Create progress tracker (will be initialized later with actual values)
 	var progressTracker *progress.Tracker
 
+	// Initialize rclone-inspired optimizations
+	var streamingOptimizer *StreamingOptimizer
+	var memoryEstimator *DynamicMemoryEstimator
+	var priorityWorkloadMgr *PriorityWorkloadManager
+
+	if config.EnableStreamingOptimizer {
+		// Create connection pool for streaming optimizer
+		optimizerPool := make(chan *s3.Client, config.ConnectionPoolSize)
+		for i := 0; i < config.ConnectionPoolSize; i++ {
+			optimizerPool <- connPool.GetClient()
+		}
+		
+		chunkWorkers := config.ChunkWorkers
+		if chunkWorkers == 0 {
+			chunkWorkers = 8 // Default to 8 workers
+		}
+		
+		streamingOptimizer = NewStreamingOptimizer(optimizerPool, chunkWorkers)
+	}
+
+	if config.EnableDynamicMemory {
+		// Create network monitor for memory estimator
+		networkMonitor := &adaptive.NetworkMonitor{} // Placeholder - would need actual implementation
+		memoryEstimator = NewDynamicMemoryEstimator(networkMonitor)
+	}
+
+	if config.EnablePriorityQueues {
+		// Create priority workload manager
+		networkMonitor := &adaptive.NetworkMonitor{} // Placeholder - would need actual implementation
+		priorityWorkloadMgr = NewPriorityWorkloadManager(memoryEstimator, networkMonitor)
+	}
+
 	return &EnhancedMigrator{
 		connPool:         connPool,
 		tuner:            tuner,
@@ -102,6 +143,10 @@ func NewEnhancedMigrator(ctx context.Context, config EnhancedMigratorConfig) (*E
 		progress:         progressTracker,
 		integrityManager: config.IntegrityManager,
 		config:           config,
+		// Rclone-inspired optimizations
+		streamingOptimizer:  streamingOptimizer,
+		memoryEstimator:     memoryEstimator,
+		priorityWorkloadMgr: priorityWorkloadMgr,
 	}, nil
 }
 

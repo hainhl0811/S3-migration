@@ -535,6 +535,11 @@ func StartMigration(c *gin.Context) {
 		SecretKey:          "", // Will be set below if provided
 		TaskID:             taskID,
 		IntegrityManager:   integrityManager,
+		// Rclone-inspired optimizations
+		EnablePriorityQueues:    true,
+		EnableDynamicMemory:     true,
+		EnableStreamingOptimizer: true,
+		ChunkWorkers:            8,
 	}
 	
 	// Add explicit source credentials if provided
