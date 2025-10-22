@@ -36,7 +36,7 @@ spec:
         - name: GIN_MODE
           value: "release"
         - name: GOMEMLIMIT
-          value: "1800MiB"  # Set Go memory limit to 90% of 2Gi limit (prevents OOM)
+          value: "3500MiB"  # Set Go memory limit to 90% of 4Gi limit (allows more workers)
         - name: GOGC
           value: "50"  # Aggressive garbage collection (default 100)
         - name: ENCRYPTION_KEY
@@ -70,7 +70,7 @@ spec:
             memory: "512Mi"
             cpu: "500m"
           limits:
-            memory: "2Gi"  # Reduced from 8Gi - node only has 8GB total
+            memory: "4Gi"  # Increased to allow more workers for better performance
             cpu: "2000m"
         livenessProbe:
           httpGet:
