@@ -55,11 +55,17 @@ func NewTuner() *Tuner {
 	maxWorkers := memMgr.GetMaxWorkers()
 	
 	// All patterns now use memory-aware limits (no hardcoded differences)
+	// Start with aggressive defaults - memory manager will limit if needed
+	defaultWorkers := maxWorkers / 2 // Start with 50% of max workers
+	if defaultWorkers < 50 {
+		defaultWorkers = min(50, maxWorkers) // At least 50 workers
+	}
+	
 	configs := map[models.WorkloadPattern]WorkerConfig{
-		models.PatternManySmall:  {Min: 1, Max: maxWorkers, Default: 1},
-		models.PatternMixed:      {Min: 1, Max: maxWorkers, Default: 1},
-		models.PatternLargeFiles: {Min: 1, Max: maxWorkers, Default: 1}, // Memory manager will limit appropriately
-		models.PatternUnknown:    {Min: 1, Max: maxWorkers, Default: 1},
+		models.PatternManySmall:  {Min: 10, Max: maxWorkers, Default: defaultWorkers},
+		models.PatternMixed:      {Min: 10, Max: maxWorkers, Default: defaultWorkers},
+		models.PatternLargeFiles: {Min: 5, Max: maxWorkers, Default: defaultWorkers / 2}, // Memory manager will limit appropriately
+		models.PatternUnknown:    {Min: 10, Max: maxWorkers, Default: defaultWorkers},
 	}
 
 	t := &Tuner{
@@ -251,12 +257,8 @@ func (t *Tuner) GetOptimalWorkers() int {
 	// Apply bounds
 	boundedWorkers := max(t.minWorkers, min(optimalWorkers, t.maxWorkers))
 
-	// Gradual adjustment
-	if boundedWorkers > current {
-		t.currentWorkers.Store(int32(min(current+2, boundedWorkers)))
-	} else if boundedWorkers < current {
-		t.currentWorkers.Store(int32(max(current-1, boundedWorkers)))
-	}
+	// Fast adjustment - jump to optimal immediately for better performance
+	t.currentWorkers.Store(int32(boundedWorkers))
 
 	t.lastAdjustmentTime = time.Now()
 	return int(t.currentWorkers.Load())
