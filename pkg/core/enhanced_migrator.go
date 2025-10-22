@@ -209,15 +209,15 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 		fileSizes[i] = obj.Size
 	}
 
-	// MAXIMUM PERFORMANCE: Use cluster capacity - no adaptive throttling
-	// With 3Gi memory limit and 3MiB per worker = 1000 workers max
-	// Use 900 workers to leave 10% headroom for GC
-	optimalWorkers := 900  // MAXIMUM: Use full cluster capacity
+	// BALANCED PERFORMANCE: Use high worker count with safety margin
+	// With 3Gi memory limit and 5MiB per worker (realistic) = 600 workers max
+	// Use 400 workers to leave 33% headroom to prevent OOM
+	optimalWorkers := 400  // BALANCED: High performance with stability
 	
 	// Calculate average file size for logging
 	avgFileSizeMB := float64(totalSize) / float64(len(objects)) / 1024 / 1024
 	fmt.Printf("📊 Workload: %d files, avg size: %.2f MB, total: %.2f GB\n", len(objects), avgFileSizeMB, float64(totalSize)/1024/1024/1024)
-	fmt.Printf("🚀 USING MAXIMUM %d WORKERS (using full cluster capacity)\n", optimalWorkers)
+	fmt.Printf("🚀 USING %d WORKERS (balanced for stability and performance)\n", optimalWorkers)
 
 	// If dry run, just return the analysis
 	if input.DryRun {
