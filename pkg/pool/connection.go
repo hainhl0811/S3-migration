@@ -44,7 +44,7 @@ func DefaultConnectionPoolConfig() ConnectionPoolConfig {
 	return ConnectionPoolConfig{
 		Size:       10,
 		Region:     "us-east-1",
-		MaxRetries: 3,
+		MaxRetries: 10,  // Increased from 3 to handle rate limiting better
 		Timeout:    30 * time.Second,
 	}
 }
@@ -104,6 +104,7 @@ func (cp *ConnectionPool) createClient(ctx context.Context, cfg ConnectionPoolCo
 		configOptions := []func(*config.LoadOptions) error{
 			config.WithRegion(region),
 			config.WithRetryMaxAttempts(cfg.MaxRetries),
+			config.WithRetryMode(aws.RetryModeAdaptive), // Use adaptive retry mode for better rate limit handling
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 				cfg.AccessKey,
 				cfg.SecretKey,
@@ -121,6 +122,7 @@ func (cp *ConnectionPool) createClient(ctx context.Context, cfg ConnectionPoolCo
 		configOptions := []func(*config.LoadOptions) error{
 			config.WithRegion(region),
 			config.WithRetryMaxAttempts(cfg.MaxRetries),
+			config.WithRetryMode(aws.RetryModeAdaptive), // Use adaptive retry mode for better rate limit handling
 		}
 		
 		if httpClient != nil {

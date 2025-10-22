@@ -209,15 +209,15 @@ func (m *EnhancedMigrator) Migrate(ctx context.Context, input MigrateInput) (*Mi
 		fileSizes[i] = obj.Size
 	}
 
-	// BALANCED PERFORMANCE: Use high worker count with safety margin
-	// With 3Gi memory limit and 5MiB per worker (realistic) = 600 workers max
-	// Use 400 workers to leave 33% headroom to prevent OOM
-	optimalWorkers := 400  // BALANCED: High performance with stability
+	// CONSERVATIVE PERFORMANCE: Balance speed with API rate limits
+	// S3 has rate limits, so use moderate worker count to avoid quota exhaustion
+	// Use 100 workers to stay within S3 API limits while maintaining good performance
+	optimalWorkers := 100  // CONSERVATIVE: Good performance without rate limit issues
 	
 	// Calculate average file size for logging
 	avgFileSizeMB := float64(totalSize) / float64(len(objects)) / 1024 / 1024
 	fmt.Printf("📊 Workload: %d files, avg size: %.2f MB, total: %.2f GB\n", len(objects), avgFileSizeMB, float64(totalSize)/1024/1024/1024)
-	fmt.Printf("🚀 USING %d WORKERS (balanced for stability and performance)\n", optimalWorkers)
+	fmt.Printf("🚀 USING %d WORKERS (conservative to avoid S3 rate limits)\n", optimalWorkers)
 
 	// If dry run, just return the analysis
 	if input.DryRun {
