@@ -36,9 +36,9 @@ spec:
         - name: GIN_MODE
           value: "release"
         - name: GOMEMLIMIT
-          value: "1800MiB"  # Conservative: 90% of 2Gi limit
+          value: "2700MiB"  # 90% of 3Gi limit for better performance
         - name: GOGC
-          value: "100"  # Default garbage collection
+          value: "75"  # More aggressive GC than default
         - name: ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
@@ -70,7 +70,7 @@ spec:
             memory: "512Mi"
             cpu: "500m"
           limits:
-            memory: "2Gi"  # Conservative limit
+            memory: "3Gi"  # Balanced limit for better performance
             cpu: "2000m"
         livenessProbe:
           httpGet:
