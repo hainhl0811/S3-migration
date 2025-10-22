@@ -535,10 +535,10 @@ func StartMigration(c *gin.Context) {
 		SecretKey:          "", // Will be set below if provided
 		TaskID:             taskID,
 		IntegrityManager:   integrityManager,
-		// Rclone-inspired optimizations
-		EnablePriorityQueues:    true,
-		EnableDynamicMemory:     true,
-		EnableStreamingOptimizer: true,
+		// Rclone-inspired optimizations (disabled until tested)
+		EnablePriorityQueues:    false,
+		EnableDynamicMemory:     false,
+		EnableStreamingOptimizer: false,
 		ChunkWorkers:            8,
 	}
 	

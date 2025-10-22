@@ -36,9 +36,9 @@ spec:
         - name: GIN_MODE
           value: "release"
         - name: GOMEMLIMIT
-          value: "3500MiB"  # Set Go memory limit to 90% of 4Gi limit (allows more workers)
+          value: "1800MiB"  # Conservative: 90% of 2Gi limit
         - name: GOGC
-          value: "50"  # Aggressive garbage collection (default 100)
+          value: "100"  # Default garbage collection
         - name: ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
@@ -70,7 +70,7 @@ spec:
             memory: "512Mi"
             cpu: "500m"
           limits:
-            memory: "4Gi"  # Increased to allow more workers for better performance
+            memory: "2Gi"  # Conservative limit
             cpu: "2000m"
         livenessProbe:
           httpGet:
